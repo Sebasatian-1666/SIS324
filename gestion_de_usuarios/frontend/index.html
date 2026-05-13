@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Usuarios</title>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1, h2 { color: #2c3e50; }
+        .section { display: none; }
+        .section.active { display: block; }
+        input { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: #3498db; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; transition: background-color 0.3s; }
+        button:hover { background-color: #2980b9; }
+        button.danger { background-color: #e74c3c; }
+        button.danger:hover { background-color: #c0392b; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="loginSection" class="section active">
+            <h2>Login</h2>
+            <form id="loginForm">
+                <input type="email" id="loginEmail" placeholder="Email" required>
+                <input type="password" id="loginPassword" placeholder="Contraseña" required>
+                <button type="submit">Ingresar</button>
+            </form>
+            <p id="loginError" style="color: red; display: none;">Credenciales incorrectas</p>
+        </div>
+
+        <div id="crudSection" class="section">
+            <h2>Gestión de Usuarios</h2>
+            <button id="logoutBtn" style="margin-bottom: 20px; background-color: #95a5a6;">Cerrar Sesión</button>
+            
+            <h3>Crear Nuevo Usuario</h3>
+            <form id="createForm">
+                <input type="text" id="createNombre" placeholder="Nombre" required>
+                <input type="email" id="createEmail" placeholder="Email" required>
+                <input type="password" id="createPassword" placeholder="Contraseña" required>
+                <button type="submit">Crear Usuario</button>
+            </form>
+
+            <h3>Lista de Usuarios</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nombre</th>
+                        <th>Email</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="usersTableBody">
+                    <!-- Filas dinámicas -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
