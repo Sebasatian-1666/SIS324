@@ -1,152 +1,208 @@
-const API_URL = 'http://localhost:8080/api/usuarios';
+// ── Configuración ────────────────────────────────────────────────────────
+// Cambia esta URL a tu backend en Render cuando hagas deploy
+const API_URL        = 'http://localhost:8080/api/usuarios';
+const API_PRODUCTOS  = 'http://localhost:8080/api/productos';
 
-const loginSection = document.getElementById('loginSection');
-const crudSection = document.getElementById('crudSection');
-const loginForm = document.getElementById('loginForm');
-const createForm = document.getElementById('createForm');
-const usersTableBody = document.getElementById('usersTableBody');
-const loginError = document.getElementById('loginError');
-const logoutBtn = document.getElementById('logoutBtn');
+// ── Estado de sesión (simulado, como en tu Sprint 1) ─────────────────────
+// En el Sprint 1 usabas localStorage con credenciales hardcodeadas.
+// Aquí ampliamos para soportar roles: OFERTANTE y ADMINISTRADOR.
+const USUARIOS_DEMO = [
+    { id: 1, nombre: 'Juan Ofertante', email: 'juan@test.com',   password: '123456',   rol: 'OFERTANTE' },
+    { id: 2, nombre: 'Admin Sistema',  email: 'admin@test.com',  password: 'admin123', rol: 'ADMINISTRADOR' },
+];
 
-// Inicialización
+let usuarioActual = null;
+
+// ── Inicialización ────────────────────────────────────────────────────────
 function checkAuth() {
-    if (localStorage.getItem('userAuth')) {
-        showCrud();
+    const guardado = localStorage.getItem('userSession');
+    if (guardado) {
+        usuarioActual = JSON.parse(guardado);
+        mostrarApp();
     } else {
-        showLogin();
+        mostrarLogin();
     }
 }
 
-function showLogin() {
-    loginSection.classList.add('active');
-    crudSection.classList.remove('active');
+function mostrarLogin() {
+    document.getElementById('loginSection').classList.add('active');
+    document.getElementById('appSection').classList.remove('active');
+    document.getElementById('navbar').style.display = 'none';
 }
 
-function showCrud() {
-    loginSection.classList.remove('active');
-    crudSection.classList.add('active');
-    loadUsers();
+function mostrarApp() {
+    document.getElementById('loginSection').classList.remove('active');
+    document.getElementById('appSection').classList.add('active');
+    document.getElementById('navbar').style.display = 'flex';
+    document.getElementById('navNombre').textContent =
+        usuarioActual.nombre + ' (' + usuarioActual.rol + ')';
+    cargarUsuarios();
 }
 
-// Login
-//loginForm.addEventListener('submit', async (e) => {
-//e.preventDefault();
-//const email = document.getElementById('loginEmail').value;
-//const password = document.getElementById('loginPassword').value;
-
-//try {
-//const response = await fetch(`${API_URL}/login`, {
-//  method: 'POST',
-//headers: { 'Content-Type': 'application/json' },
-//body: JSON.stringify({ email, password })
-//});
-
-//const data = await response.json();
-
-//if (response.ok && data.success) {
-//localStorage.setItem('userAuth', 'true');
-//loginError.style.display = 'none';
-//loginForm.reset();
-//  showCrud();
-//} else {
-//      loginError.style.display = 'block';
-//    }
-//} catch (error) {
-//    console.error('Error en login:', error);
-//    alert('Error al conectar con el servidor');
-//  }
-//});
-// Login SIMULADO para el Sprint 1 (Sustituye al bloque del fetch)
-loginForm.addEventListener('submit', (e) => {
+// ── Login ─────────────────────────────────────────────────────────────────
+document.getElementById('loginForm').addEventListener('submit', (e) => {
     e.preventDefault();
-    const email = document.getElementById('loginEmail').value;
+    const email    = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
 
-    console.log("Modo Prototipo: Validando credenciales localmente...");
-
-    // Usamos los mismos datos que pusiste en tu MainTest para ser coherentes
-    if (email === "juan@test.com" && password === "123456") {
-        localStorage.setItem('userAuth', 'true');
-        loginError.style.display = 'none';
-        loginForm.reset();
-        showCrud();
+    // Login simulado (igual que tu Sprint 1, ampliado con roles)
+    const user = USUARIOS_DEMO.find(u => u.email === email && u.password === password);
+    if (user) {
+        usuarioActual = user;
+        localStorage.setItem('userSession', JSON.stringify(user));
+        document.getElementById('loginError').style.display = 'none';
+        document.getElementById('loginForm').reset();
+        mostrarApp();
     } else {
-        // Si no es ese usuario, mostramos el error que ya tienes en el HTML
-        loginError.style.display = 'block';
+        document.getElementById('loginError').style.display = 'block';
     }
 });
-// Logout
-logoutBtn.addEventListener('click', () => {
-    localStorage.removeItem('userAuth');
-    showLogin();
-});
 
-// Load Users
-async function loadUsers() {
+// ── Logout ────────────────────────────────────────────────────────────────
+function logout() {
+    localStorage.removeItem('userSession');
+    usuarioActual = null;
+    mostrarLogin();
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+function switchTab(nombre, btn) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + nombre).classList.add('active');
+    btn.classList.add('active');
+
+    if (nombre === 'ofertante') cargarMisProductos();
+    if (nombre === 'admin')     cargarAdmin();
+    if (nombre === 'catalogo')  cargarCatalogo();
+    if (nombre === 'usuarios')  cargarUsuarios();
+}
+
+// ── Usuarios (Sprint 1) ───────────────────────────────────────────────────
+async function cargarUsuarios() {
     try {
-        const response = await fetch(API_URL);
-        const users = await response.json();
-        renderUsers(users);
-    } catch (error) {
-        console.error('Error al cargar usuarios:', error);
+        const res   = await fetch(API_URL);
+        const users = await res.json();
+        const tbody = document.getElementById('usersTableBody');
+        tbody.innerHTML = users.map(u => `
+            <tr>
+                <td>${u.id}</td>
+                <td>${u.nombre}</td>
+                <td>${u.email}</td>
+                <td>${u.rol || '–'}</td>
+                <td>
+                    <button class="btn-danger btn-sm" onclick="eliminarUsuario(${u.id})">Eliminar</button>
+                </td>
+            </tr>`).join('');
+    } catch (e) {
+        console.warn('Backend no disponible – modo offline', e);
+        document.getElementById('usersTableBody').innerHTML =
+            '<tr><td colspan="5" style="text-align:center;color:#aaa">Backend no conectado</td></tr>';
     }
 }
 
-// Render Users
-function renderUsers(users) {
-    usersTableBody.innerHTML = '';
-    users.forEach(user => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${user.id}</td>
-            <td>${user.nombre}</td>
-            <td>${user.email}</td>
-            <td>
-                <button class="danger" onclick="deleteUser(${user.id})">Eliminar</button>
-            </td>
-        `;
-        usersTableBody.appendChild(tr);
-    });
-}
+// Cambia "async function crearUsuario() {" por:
+window.crearUsuario = async function() {
+    // Solo enviamos los 4 campos reales de tu base de datos en orden
+    const body = {
+        id: 0, 
+        nombre: document.getElementById('createNombre').value.trim(),
+        email: document.getElementById('createEmail').value.trim(),
+        password: document.getElementById('createPassword').value
+    };
 
-// Create User
-createForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const nombre = document.getElementById('createNombre').value;
-    const email = document.getElementById('createEmail').value;
-    const password = document.getElementById('createPassword').value;
+    if (!body.nombre || !body.email || !body.password) {
+        return mostrarMsg('msgUsuario', '❌ Todos los campos son obligatorios', 'err');
+    }
 
     try {
-        const response = await fetch(API_URL, {
+        const res = await fetch(API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nombre, email, password })
+            body: JSON.stringify(body)
         });
+        const data = await res.json();
 
-        if (response.ok) {
-            createForm.reset();
-            loadUsers();
+        if (res.ok) {
+            mostrarMsg('msgUsuario', '✅ ' + (data.mensaje || 'Usuario creado correctamente'), 'ok');
+            ['createNombre', 'createEmail', 'createPassword'].forEach(id => document.getElementById(id).value = '');
+            cargarUsuarios(); 
+        } else {
+            mostrarMsg('msgUsuario', '❌ ' + (data.mensaje || 'Error al crear'), 'err');
         }
-    } catch (error) {
-        console.error('Error al crear usuario:', error);
+    } catch (e) {
+        mostrarMsg('msgUsuario', '❌ Backend no disponible', 'err');
+    } 
+};
+
+// ✅ PEGA ESTO:
+window.eliminarUsuario = async function(id) {
+    if (!confirm('¿Realmente deseas eliminar este usuario?')) return;
+    try {
+        const res = await fetch(API_URL + '?id=' + id, { method: 'DELETE' });
+        if (res.ok) {
+            mostrarMsg('msgUsuario', '✅ Usuario eliminado correctamente', 'ok');
+            cargarUsuarios();
+        } else {
+            const data = await res.json();
+            mostrarMsg('msgUsuario', '❌ ' + (data.mensaje || 'No se pudo eliminar'), 'err');
+        }
+    } catch (e) { 
+        console.error(e);
+        mostrarMsg('msgUsuario', '❌ Error: Backend no disponible', 'err');
+    }
+};
+
+// ── Utilidad ──────────────────────────────────────────────────────────────
+function mostrarMsg(elId, texto, tipo) {
+    const el = document.getElementById(elId);
+    el.textContent = texto;
+    el.className = 'msg ' + tipo;
+    el.style.display = 'block';
+    setTimeout(() => el.style.display = 'none', 4000);
+}
+// ✅ PEGA ESTO AL FINAL (Antes de checkAuth();):
+
+// Cambiar visualmente entre Login y Registro
+window.conmutarAuth = function(mostrarRegistro) {
+    document.getElementById('loginFormContainer').style.display = mostrarRegistro ? 'none' : 'block';
+    document.getElementById('registroFormContainer').style.display = mostrarRegistro ? 'block' : 'none';
+    document.getElementById('loginError').style.display = 'none';
+};
+
+// Escuchar el envío del formulario de registro público
+document.getElementById('registroForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    // Mismo mapeo estricto de tu base de datos: id, nombre, email, password
+    const body = {
+        id: 0,
+        nombre: document.getElementById('regNombre').value.trim(),
+        email: document.getElementById('regEmail').value.trim(),
+        password: document.getElementById('regPassword').value
+    };
+
+    try {
+        const res = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+            mostrarMsg('msgRegistro', '✅ Cuenta creada con éxito. Ya puedes ingresar.', 'ok');
+            document.getElementById('registroForm').reset();
+            
+            // Para el login simulado le asignamos un rol por defecto temporal
+            USUARIOS_DEMO.push({ id: Date.now(), ...body, rol: 'DEMANDANTE' });
+            
+            setTimeout(() => window.conmutarAuth(false), 1500);
+        } else {
+            mostrarMsg('msgRegistro', '❌ ' + (data.mensaje || 'Error al registrar'), 'err');
+        }
+    } catch (e) {
+        mostrarMsg('msgRegistro', '❌ Backend no disponible', 'err');
     }
 });
-
-// Delete User
-window.deleteUser = async function (id) {
-    if (confirm('¿Estás seguro de eliminar este usuario?')) {
-        try {
-            const response = await fetch(`${API_URL}/${id}`, {
-                method: 'DELETE'
-            });
-
-            if (response.ok) {
-                loadUsers();
-            }
-        } catch (error) {
-            console.error('Error al eliminar usuario:', error);
-        }
-    }
-}
-
 checkAuth();

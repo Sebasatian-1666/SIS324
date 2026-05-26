@@ -8,6 +8,21 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class UsuarioDAO {
+   public void crearTabla() {
+        String sql = "CREATE TABLE IF NOT EXISTS usuarios ("
+                   + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                   + "nombre TEXT NOT NULL, "
+                   + "email TEXT UNIQUE NOT NULL, "
+                   + "password TEXT NOT NULL"
+                   + ");";
+        try (Connection con = Conexion.conectar();
+             java.sql.Statement stmt = con.createStatement()) {
+            stmt.execute(sql);
+            System.out.println("Tabla 'usuarios' verificada/creada en SQLite.");
+        } catch (SQLException e) {
+            System.out.println("Error al crear tabla usuarios: " + e.getMessage());
+        }
+    }
 
     public boolean registrar(Usuario usuario) {
         String sql = "INSERT INTO usuarios (nombre, email, password) VALUES (?, ?, ?)";

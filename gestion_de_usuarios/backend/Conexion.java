@@ -8,9 +8,12 @@ public class Conexion {
     public static Connection conectar() {
         Connection con = null;
         try {
-            // Asegúrate de tener el archivo sqlite-jdbc.jar en tu classpath
+            Class.forName("org.sqlite.JDBC");
+            
             String url = "jdbc:sqlite:usuarios.db";
             con = DriverManager.getConnection(url);
+        } catch (ClassNotFoundException e) {
+            System.out.println("Error: ¡No se encontró el archivo JAR de SQLite! " + e.getMessage());
         } catch (SQLException e) {
             System.out.println("Error de conexión: " + e.getMessage());
         }

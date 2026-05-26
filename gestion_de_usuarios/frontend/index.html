@@ -3,64 +3,468 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Usuarios</title>
+    <title>Plataforma – Sprint 2</title>
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; color: #333; }
-        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h1, h2 { color: #2c3e50; }
-        .section { display: none; }
-        .section.active { display: block; }
-        input { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
-        button { background-color: #3498db; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; transition: background-color 0.3s; }
-        button:hover { background-color: #2980b9; }
-        button.danger { background-color: #e74c3c; }
-        button.danger:hover { background-color: #c0392b; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #f8f9fa; }
+        /* ── Base (mantiene tu estilo original) ── */
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:        #f0f2f5;
+            --surface:   #ffffff;
+            --border:    #e2e6ea;
+            --text:      #1a202c;
+            --muted:     #718096;
+            --primary:   #3498db;
+            --primary-d: #2980b9;
+            --danger:    #e74c3c;
+            --danger-d:  #c0392b;
+            --success:   #27ae60;
+            --warning:   #f39c12;
+            --pending-bg:#fff8e1;
+            --pending-c: #856404;
+            --approved-bg:#d4edda;
+            --approved-c:#155724;
+            --rejected-bg:#f8d7da;
+            --rejected-c:#842029;
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* ── Navbar ── */
+        .navbar {
+            background: #2c3e50;
+            padding: 0 1.5rem;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 200;
+            box-shadow: 0 2px 8px rgba(0,0,0,.25);
+        }
+        .nav-brand { color: #fff; font-weight: 700; font-size: 1rem; letter-spacing: .5px; }
+        .nav-user  { color: #aaa; font-size: .85rem; }
+        .nav-user span { color: #fff; font-weight: 600; }
+
+        /* ── Contenedor ── */
+        .container { max-width: 860px; margin: 2rem auto; padding: 0 1.2rem; }
+
+        /* ── Secciones (login / app) ── */
+        .section       { display: none; }
+        .section.active{ display: block; }
+
+        /* ── Card ── */
+        .card {
+            background: var(--surface);
+            border-radius: 10px;
+            padding: 1.6rem;
+            box-shadow: 0 1px 8px rgba(0,0,0,.06);
+            margin-bottom: 1.2rem;
+        }
+        .card h2 { font-size: 1rem; font-weight: 600; color: #2c3e50; margin-bottom: 1rem; }
+
+        /* ── Tabs ── */
+        .tabs {
+            display: flex;
+            gap: .4rem;
+            border-bottom: 2px solid var(--border);
+            margin-bottom: 1.2rem;
+        }
+        .tab {
+            padding: .55rem 1.1rem;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: .9rem;
+            font-weight: 500;
+            color: var(--muted);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all .2s;
+        }
+        .tab:hover { color: var(--primary); }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* ── Forms ── */
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+        .form-group { display: flex; flex-direction: column; gap: .35rem; }
+        .form-group.full { grid-column: 1/-1; }
+        label { font-size: .8rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+
+        input, select, textarea {
+            padding: .55rem .85rem;
+            border: 1.5px solid var(--border);
+            border-radius: 7px;
+            font-family: inherit;
+            font-size: .92rem;
+            color: var(--text);
+            background: #fafbfc;
+            transition: border .18s;
+            width: 100%;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: #fff;
+        }
+        textarea { resize: vertical; }
+
+        /* ── Botones ── */
+        button {
+            padding: .55rem 1.1rem;
+            border: none;
+            border-radius: 7px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: .9rem;
+            font-weight: 600;
+            transition: background .18s, transform .1s;
+        }
+        button:active { transform: scale(.97); }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-d); }
+        .btn-danger  { background: var(--danger); color: #fff; }
+        .btn-danger:hover { background: var(--danger-d); }
+        .btn-success { background: var(--success); color: #fff; }
+        .btn-success:hover { background: #1e8449; }
+        .btn-warning { background: var(--warning); color: #fff; }
+        .btn-warning:hover { background: #d68910; }
+        .btn-muted   { background: #95a5a6; color: #fff; }
+        .btn-muted:hover { background: #7f8c8d; }
+        .btn-sm { padding: .32rem .75rem; font-size: .8rem; }
+
+        .form-actions { display: flex; gap: .6rem; margin-top: 1rem; }
+
+        /* ── Badges ── */
+        .badge {
+            display: inline-block;
+            padding: .22rem .65rem;
+            border-radius: 20px;
+            font-size: .73rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .4px;
+        }
+        .b-pending  { background: var(--pending-bg);  color: var(--pending-c);  }
+        .b-approved { background: var(--approved-bg); color: var(--approved-c); }
+        .b-rejected { background: var(--rejected-bg); color: var(--rejected-c); }
+        .b-info     { background: #cff4fc; color: #055160; }
+
+        /* ── Tabla (tu estilo original) ── */
+        table { width: 100%; border-collapse: collapse; margin-top: .5rem; font-size: .88rem; }
+        th, td { padding: .75rem .8rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { background: #f8f9fa; font-weight: 600; color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .4px; }
+        tr:hover td { background: #f8f9fa; }
+
+        /* ── Productos grid ── */
+        .productos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .9rem; margin-top: .5rem; }
+        .prod-card {
+            border: 1.5px solid var(--border);
+            border-radius: 9px;
+            padding: 1rem;
+            background: #fafbfc;
+            display: flex;
+            flex-direction: column;
+            gap: .45rem;
+            transition: box-shadow .2s;
+        }
+        .prod-card:hover { box-shadow: 0 3px 12px rgba(0,0,0,.09); }
+        .prod-card.PENDIENTE  { border-left: 4px solid var(--warning); }
+        .prod-card.APROBADO   { border-left: 4px solid var(--success); }
+        .prod-card.RECHAZADO  { border-left: 4px solid var(--danger); }
+        .prod-titulo { font-weight: 700; font-size: .97rem; color: #2c3e50; }
+        .prod-desc   { font-size: .82rem; color: var(--muted); line-height: 1.45; }
+        .prod-meta   { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .3rem; }
+        .prod-precio { font-weight: 800; font-size: 1.05rem; color: var(--primary); }
+        .prod-actions { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .2rem; }
+        .motivo { background: var(--rejected-bg); color: var(--rejected-c); padding: .35rem .6rem; border-radius: 6px; font-size: .78rem; }
+
+        /* ── Stats ── */
+        .stats { display: flex; gap: .8rem; margin-bottom: 1rem; }
+        .stat { flex: 1; background: var(--surface); border-radius: 9px; padding: .9rem; text-align: center; box-shadow: 0 1px 5px rgba(0,0,0,.05); }
+        .stat-n { display: block; font-size: 1.9rem; font-weight: 800; color: var(--primary); }
+        .stat-l { font-size: .75rem; color: var(--muted); margin-top: .2rem; display: block; }
+
+        /* ── Mensajes ── */
+        .msg { padding: .6rem .9rem; border-radius: 7px; font-size: .88rem; margin-top: .8rem; display: none; }
+        .msg.ok  { background: var(--approved-bg); color: var(--approved-c); }
+        .msg.err { background: var(--rejected-bg); color: var(--rejected-c); }
+
+        /* ── Modal ── */
+        .overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,.45);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+        }
+        .overlay.open { display: flex; }
+        .modal {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 1.8rem;
+            max-width: 420px;
+            width: 92%;
+            box-shadow: 0 8px 30px rgba(0,0,0,.2);
+        }
+        .modal h3 { margin-bottom: .7rem; }
+        .modal textarea { width: 100%; margin: .7rem 0; }
+        .modal-actions { display: flex; gap: .6rem; }
+
+        /* ── Login (tu estilo original) ── */
+        #loginCard { max-width: 400px; margin: 6rem auto; }
+        #loginCard h2 { color: #2c3e50; margin-bottom: 1rem; }
+        #loginCard input { margin-bottom: .8rem; }
+
+        /* ── Responsive ── */
+        @media(max-width:580px) {
+            .form-row { grid-template-columns: 1fr; }
+            .stats    { flex-direction: column; }
+        }
     </style>
 </head>
 <body>
+
+<!-- ── Navbar ── -->
+<nav class="navbar" id="navbar" style="display:none">
+    <div class="nav-brand">🛍️ Plataforma</div>
+    <div class="nav-user">Usuario: <span id="navNombre">–</span></div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- SECCIÓN LOGIN                                   -->
+<!-- ═══════════════════════════════════════════════ -->
+<<div id="loginSection" class="section active">
     <div class="container">
-        <div id="loginSection" class="section active">
-            <h2>Login</h2>
-            <form id="loginForm">
-                <input type="email" id="loginEmail" placeholder="Email" required>
-                <input type="password" id="loginPassword" placeholder="Contraseña" required>
-                <button type="submit">Ingresar</button>
-            </form>
-            <p id="loginError" style="color: red; display: none;">Credenciales incorrectas</p>
-        </div>
-
-        <div id="crudSection" class="section">
-            <h2>Gestión de Usuarios</h2>
-            <button id="logoutBtn" style="margin-bottom: 20px; background-color: #95a5a6;">Cerrar Sesión</button>
+        <div class="card" id="loginCard">
             
-            <h3>Crear Nuevo Usuario</h3>
-            <form id="createForm">
-                <input type="text" id="createNombre" placeholder="Nombre" required>
-                <input type="email" id="createEmail" placeholder="Email" required>
-                <input type="password" id="createPassword" placeholder="Contraseña" required>
-                <button type="submit">Crear Usuario</button>
-            </form>
+            <div id="loginFormContainer">
+                <h2>🔐 Iniciar Sesión</h2>
+                <form id="loginForm">
+                    <input type="email" id="loginEmail" placeholder="Email" required>
+                    <input type="password" id="loginPassword" placeholder="Contraseña" required>
+                    <button type="submit" class="btn-primary" style="width:100%">Ingresar</button>
+                </form>
+                <p style="margin-top: 1rem; text-align: center; font-size: .85rem;">
+                    ¿No tienes cuenta? <a href="#" onclick="conmutarAuth(true)">Regístrate aquí</a>
+                </p>
+            </div>
 
-            <h3>Lista de Usuarios</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Nombre</th>
-                        <th>Email</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody id="usersTableBody">
-                    <!-- Filas dinámicas -->
-                </tbody>
-            </table>
+            <div id="registroFormContainer" style="display:none">
+                <h2>📝 Crear Cuenta Nueva</h2>
+                <form id="registroForm">
+                    <input type="text" id="regNombre" placeholder="Nombre Completo" required style="margin-bottom:.8rem">
+                    <input type="email" id="regEmail" placeholder="Correo Electrónico" required style="margin-bottom:.8rem">
+                    <input type="password" id="regPassword" placeholder="Contraseña (Mín. 6 chars)" required style="margin-bottom:.8rem">
+                    <select id="regRol" style="margin-bottom:.8rem">
+                        <option value="OFERTANTE">💼 Ofertante (Vender)</option>
+                        <option value="DEMANDANTE">🔍 Demandante (Buscar)</option>
+                    </select>
+                    <button type="submit" class="btn-success" style="width:100%">Registrarme</button>
+                </form>
+                <p style="margin-top: 1rem; text-align: center; font-size: .85rem;">
+                    ¿Ya tienes cuenta? <a href="#" onclick="conmutarAuth(false)">Inicia sesión</a>
+                </p>
+            </div>
+
+            <p id="loginError" style="color:var(--danger);display:none;margin-top:.7rem;font-size:.88rem">
+                ❌ Credenciales incorrectas
+            </p>
+            <div id="msgRegistro" class="msg"></div>
+            <p style="margin-top:.8rem;font-size:.8rem;color:var(--muted)">
+                Demo → <strong>admin@test.com / admin123</strong> (Admin) &nbsp;|&nbsp; <strong>juan@test.com / 123456</strong> (Ofertante)
+            </p>
         </div>
     </div>
+</div>
 
-    <script src="app.js"></script>
+<!-- ═══════════════════════════════════════════════ -->
+<!-- SECCIÓN PRINCIPAL (post-login)                  -->
+<!-- ═══════════════════════════════════════════════ -->
+<div id="appSection" class="section">
+    <div class="container">
+
+        <!-- Tabs principales -->
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('usuarios',  this)">👥 Usuarios</button>
+            <button class="tab"        onclick="switchTab('ofertante', this)">📦 Mis Productos</button>
+            <button class="tab"        onclick="switchTab('admin',     this)">🛡️ Admin</button>
+            <button class="tab"        onclick="switchTab('catalogo',  this)">🏪 Catálogo</button>
+            <button class="btn-muted btn-sm" style="margin-left:auto" onclick="logout()">Salir</button>
+        </div>
+
+        <!-- ─────────────────────────────────────────── -->
+        <!-- TAB: USUARIOS (tu Sprint 1 original)        -->
+        <!-- ─────────────────────────────────────────── -->
+        <div id="tab-usuarios" class="tab-content active">
+            <div class="card">
+                <h2>➕ Crear Nuevo Usuario</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nombre</label>
+                        <input type="text" id="createNombre" placeholder="Juan Pérez" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="createEmail" placeholder="juan@email.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Contraseña</label>
+                        <input type="password" id="createPassword" placeholder="Mínimo 6 caracteres" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Rol</label>
+                        <select id="createRol">
+                            <option value="OFERTANTE">Ofertante</option>
+                            <option value="DEMANDANTE">Demandante</option>
+                            <option value="ADMINISTRADOR">Administrador</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn-primary" onclick="crearUsuario()">Crear Usuario</button>
+                </div>
+                <div id="msgUsuario" class="msg"></div>
+            </div>
+
+            <div class="card">
+                <h2>Lista de Usuarios</h2>
+                <table>
+                    <thead>
+                        <tr><th>ID</th><th>Nombre</th><th>Email</th><th>Rol</th><th>Acciones</th></tr>
+                    </thead>
+                    <tbody id="usersTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ─────────────────────────────────────────── -->
+        <!-- TAB: MIS PRODUCTOS (HU-01 y HU-02)         -->
+        <!-- ─────────────────────────────────────────── -->
+        <div id="tab-ofertante" class="tab-content">
+            <div class="card">
+                <h2 id="prodFormTitulo">➕ Registrar Producto/Servicio <span class="badge b-pending">HU-01</span></h2>
+                <input type="hidden" id="prodEditId">
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Título *</label>
+                        <input type="text" id="prodTitulo" placeholder="Ej: Laptop HP Pavilion">
+                    </div>
+                    <div class="form-group">
+                        <label>Categoría *</label>
+                        <select id="prodCategoria">
+                            <option value="">-- Seleccionar --</option>
+                            <option>Tecnología</option>
+                            <option>Hogar</option>
+                            <option>Servicios</option>
+                            <option>Educación</option>
+                            <option>Salud</option>
+                            <option>Moda</option>
+                            <option>Otros</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Precio (USD) *</label>
+                        <input type="number" id="prodPrecio" placeholder="0.00" min="0.01" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label>Tipo</label>
+                        <select id="prodTipo">
+                            <option value="PRODUCTO">📦 Producto</option>
+                            <option value="SERVICIO">🔧 Servicio</option>
+                        </select>
+                    </div>
+                    <div class="form-group full">
+                        <label>Descripción * (mínimo 10 caracteres)</label>
+                        <textarea id="prodDesc" rows="3" placeholder="Describe tu producto o servicio..."></textarea>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn-primary" onclick="guardarProducto()">💾 Guardar</button>
+                    <button class="btn-muted"   onclick="cancelarEdicion()">✖ Cancelar</button>
+                </div>
+                <div id="msgProducto" class="msg"></div>
+            </div>
+
+            <div class="card">
+                <h2>📋 Mis Productos/Servicios</h2>
+                <div class="productos-grid" id="listaOfertante">
+                    <p style="color:var(--muted);font-size:.88rem">Cargando...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ─────────────────────────────────────────── -->
+        <!-- TAB: ADMIN (HU-03)                          -->
+        <!-- ─────────────────────────────────────────── -->
+        <div id="tab-admin" class="tab-content">
+
+            <!-- Stats -->
+            <div class="stats">
+                <div class="stat"><span class="stat-n" id="cntPend">–</span><span class="stat-l">Pendientes</span></div>
+                <div class="stat"><span class="stat-n" id="cntApr">–</span><span class="stat-l">Aprobados</span></div>
+                <div class="stat"><span class="stat-n" id="cntRech">–</span><span class="stat-l">Rechazados</span></div>
+            </div>
+
+            <div class="card">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.8rem">
+                    <h2 style="margin:0">⏳ Productos Pendientes <span class="badge b-pending">HU-03</span></h2>
+                    <button class="btn-muted btn-sm" onclick="cargarAdmin()">🔄 Actualizar</button>
+                </div>
+                <div class="productos-grid" id="listaAdmin">
+                    <p style="color:var(--muted);font-size:.88rem">Cargando...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ─────────────────────────────────────────── -->
+        <!-- TAB: CATÁLOGO (solo aprobados)              -->
+        <!-- ─────────────────────────────────────────── -->
+        <div id="tab-catalogo" class="tab-content">
+            <div style="display:flex;gap:.8rem;margin-bottom:1rem;flex-wrap:wrap">
+                <input type="text" id="buscar" placeholder="🔍 Buscar..." oninput="filtrarCatalogo()" style="flex:1;min-width:180px">
+                <select id="filtroCat" onchange="filtrarCatalogo()" style="width:180px">
+                    <option value="">Todas las categorías</option>
+                    <option>Tecnología</option><option>Hogar</option><option>Servicios</option>
+                    <option>Educación</option><option>Salud</option><option>Moda</option><option>Otros</option>
+                </select>
+            </div>
+            <div class="productos-grid" id="listaCatalogo">
+                <p style="color:var(--muted);font-size:.88rem">Cargando catálogo...</p>
+            </div>
+        </div>
+
+    </div><!-- /container -->
+</div><!-- /appSection -->
+
+<!-- ── Modal rechazo ── -->
+<div id="overlay" class="overlay">
+    <div class="modal">
+        <h3>❌ Rechazar Producto</h3>
+        <p style="font-size:.88rem;color:var(--muted)">Indica el motivo del rechazo (obligatorio):</p>
+        <textarea id="motivoTexto" rows="3" placeholder="Ej: Descripción incompleta o precio inválido..."></textarea>
+        <div class="modal-actions">
+            <button class="btn-danger" onclick="confirmarRechazo()">Confirmar Rechazo</button>
+            <button class="btn-muted"  onclick="cerrarModal()">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<script src="app.js"></script>
+<script src="productos.js"></script>
 </body>
 </html>
