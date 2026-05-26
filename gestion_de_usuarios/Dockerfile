@@ -1,21 +1,28 @@
-# 1. Usamos una imagen oficial activa y moderna de Java 17
+# 1. Imagen base oficial de Java 17
 FROM amazoncorretto:17-alpine
 WORKDIR /app
 
-# 2. Instalamos "findutils" porque la versión Alpine de Linux la necesita para el comando find
-RUN apk add --no-cache findutils
+# 2. Instalar herramientas necesarias (findutils, wget para descargar librerías)
+RUN apk add --no-cache findutils wget
 
-# 3. Copiamos todo el repositorio de Git al contenedor
+# 3. Descargar los archivos .jar de Jackson necesarios para el ObjectMapper
+RUN mkdir -p lib && \
+    wget -P lib/ https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.15.2/jackson-databind-2.15.2.jar && \
+    wget -P lib/ https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-core/2.15.2/jackson-core-2.15.2.jar && \
+    wget -P lib/ https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.15.2/jackson-annotations-2.15.2.jar
+
+# 4. Copiar todo tu repositorio al contenedor
 COPY . .
 
-# 4. Creamos la carpeta para guardar los binarios compilados
+# 5. Creamos la carpeta bin para los binarios compilados
 RUN mkdir -p bin
 
-# 5. Buscamos y compilamos todos los archivos .java dentro de la carpeta backend
-RUN javac -d bin $(find backend -name "*.java")
+# 6. Compilamos incluyendo las librerías Jackson en el classpath (-cp)
+# NOTA: Ignoramos el archivo "Spec.java" de pruebas para que no pida JUnit en producción
+RUN javac -cp "lib/*" -d bin $(find backend -name "*.java" ! -name "*Spec.java")
 
-# 6. Exponemos el puerto estándar que usa Render
+# 7. Exponemos el puerto estándar
 EXPOSE 8080
 
-# 7. Comando para arrancar tu Servidor principal
-CMD ["java", "-cp", "bin:backend", "Servidor"]
+# 8. Comando para arrancar tu Servidor principal usando las librerías descargadas
+CMD ["java", "-cp", "bin:lib/*:backend", "Servidor"]
