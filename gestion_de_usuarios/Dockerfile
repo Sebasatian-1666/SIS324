@@ -1,19 +1,21 @@
-# 1. Imagen base ligera con Java 17
-FROM openjdk:17-jdk-slim
+# 1. Usamos una imagen oficial activa y moderna de Java 17
+FROM amazoncorretto:17-alpine
 WORKDIR /app
 
-# 2. Copiamos absolutamente todo el repositorio al contenedor
+# 2. Instalamos "findutils" porque la versión Alpine de Linux la necesita para el comando find
+RUN apk add --no-cache findutils
+
+# 3. Copiamos todo el repositorio de Git al contenedor
 COPY . .
 
-# 3. Creamos la carpeta para los binarios compilados
+# 4. Creamos la carpeta para guardar los binarios compilados
 RUN mkdir -p bin
 
-# 4. Buscamos TODOS los archivos .java (estén en la carpeta que estén) y los compilamos
-RUN javac -d bin $(find . -name "*.java")
+# 5. Buscamos y compilamos todos los archivos .java dentro de la carpeta backend
+RUN javac -d bin $(find backend -name "*.java")
 
-# 5. Exponemos el puerto estándar que usa Render
+# 6. Exponemos el puerto estándar que usa Render
 EXPOSE 8080
 
-# 6. Comando para arrancar el servidor
-# Buscamos la clase Servidor de forma dinámica en cualquier paquete compilado
-CMD ["java", "-cp", "bin", "Servidor"]
+# 7. Comando para arrancar tu Servidor principal
+CMD ["java", "-cp", "bin:backend", "Servidor"]
