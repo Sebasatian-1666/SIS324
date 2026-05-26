@@ -1,8 +1,8 @@
-# 1. Imagen base oficial de Java 17
+# 1. Imagen base oficial de Amazon Corretto
 FROM amazoncorretto:17-alpine
 WORKDIR /app
 
-# 2. Instalar herramientas necesarias (findutils, wget para descargar librerías)
+# 2. Instalar herramientas necesarias
 RUN apk add --no-cache findutils wget
 
 # 3. Descargar los archivos .jar de Jackson necesarios para el ObjectMapper
@@ -17,12 +17,11 @@ COPY . .
 # 5. Creamos la carpeta bin para los binarios compilados
 RUN mkdir -p bin
 
-# 6. Compilamos incluyendo las librerías Jackson en el classpath (-cp)
-# NOTA: Ignoramos el archivo "Spec.java" de pruebas para que no pida JUnit en producción
-RUN javac -cp "lib/*" -d bin $(find backend -name "*.java" ! -name "*Spec.java")
+# 6. Compilamos forzando la compatibilidad con Java 17 para evitar el UnsupportedClassVersionError
+RUN javac -cp "lib/*" -d bin --release 17 $(find backend -name "*.java" ! -name "*Spec.java")
 
 # 7. Exponemos el puerto estándar
 EXPOSE 8080
 
-# 8. Comando para arrancar tu Servidor principal usando las librerías descargadas
+# 8. Comando para arrancar tu Servidor principal
 CMD ["java", "-cp", "bin:lib/*:backend", "Servidor"]
