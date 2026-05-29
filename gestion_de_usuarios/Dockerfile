@@ -1,27 +1,23 @@
-# 1. Forzamos entorno nativo en Java 17 de Eclipse Temurin
+# 1. Imagen base nativa
 FROM eclipse-temurin:17-jdk-alpine
 WORKDIR /app
 
-# 2. Instalar herramientas del sistema indispensables
+# 2. Herramientas básicas
 RUN apk add --no-cache findutils wget
 
-# 3. Descargar las librerías necesarias de Jackson
+# 3. Descarga de librerías
 RUN mkdir -p lib && \
     wget -P lib/ https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.15.2/jackson-databind-2.15.2.jar && \
     wget -P lib/ https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-core/2.15.2/jackson-core-2.15.2.jar && \
     wget -P lib/ https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.15.2/jackson-annotations-2.15.2.jar
 
-# 4. Copiar los archivos del proyecto al contenedor
+# 4. Copiar archivos
 COPY . .
-
-# 5. Crear directorio de salida
 RUN mkdir -p bin
 
-# 6. Forzamos al compilador a generar binarios estrictos de Java 17 
-RUN javac -cp "lib/*" -d bin --release 17 $(find backend -name "*.java" ! -name "*Spec.java")
+# 5. EL CAMBIO: Forzar origen, destino y release a Java 17 de forma ultra estricta
+RUN javac -cp "lib/*" -d bin --source 17 --target 17 --release 17 $(find backend -name "*.java" ! -name "*Spec.java")
 
-# 7. Exponer puerto del backend
+# 6. Ejecución
 EXPOSE 8080
-
-# 8. Arrancar la aplicación usando la misma versión
 CMD ["java", "-cp", "bin:lib/*:backend", "Servidor"]
