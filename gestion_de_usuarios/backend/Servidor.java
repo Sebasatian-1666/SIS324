@@ -17,12 +17,21 @@ public class Servidor {
     private static final ObjectMapper mapper = new ObjectMapper();
 
     public static void main(String[] args) throws IOException {
-        // Inicializar las tablas si no existen
-        prodDAO.crearTabla();
-        // Intentar crear tabla de usuarios si hace falta
-        userDAO.crearTabla(); // Llama indirectamente o asegura la estructura de usuarios
+        System.out.println("🔄 Iniciando componentes del servidor...");
 
-        // En Render te dan el puerto en la variable de entorno PORT. Localmente usa el 8080.
+        // 🚨 CAPTURAR ERRORES DE BASE DE DATOS PARA QUE NO APAGUE EL SERVIDOR
+        try {
+            System.out.println("⏳ Inicializando tablas en la base de datos...");
+            prodDAO.crearTabla();
+            userDAO.crearTabla();
+            System.out.println("✅ Tablas verificadas/creadas con éxito.");
+        } catch (Exception e) {
+            System.out.println("🚨 ERROR AL INICIALIZAR LA BASE DE DATOS:");
+            e.printStackTrace(); // Esto les mostrará el error real en los logs de Render
+            System.out.println("⚠️ El servidor intentará continuar levantándose de todos modos...");
+        }
+
+        // Configuración del puerto de Render
         String portEnv = System.getenv("PORT");
         int puerto = (portEnv != null) ? Integer.parseInt(portEnv) : 8080;
 
