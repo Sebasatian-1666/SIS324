@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 
 public class Servidor {
@@ -44,6 +45,7 @@ public class Servidor {
         server.start();
     }
 
+    // ─── PÁGINA PRINCIPAL (MENÚ) ───
     static class RootHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -79,6 +81,7 @@ public class Servidor {
         }
     }
 
+    // ─── HANDLER PRODUCTOS ───
     static class ProductosHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -93,19 +96,33 @@ public class Servidor {
 
             try {
                 if ("GET".equalsIgnoreCase(metodo)) {
-                    String json = "";
+                    List<Producto> lista;
+                    
                     if (query != null && query.contains("estado=PENDIENTE")) {
-                        json = mapper.writeValueAsString(prodDAO.listarPendientes());
+                        lista = prodDAO.listarPendientes();
                     } else if (query != null && query.contains("ofertanteId=")) {
                         int id = Integer.parseInt(query.split("ofertanteId=")[1].split("&")[0]);
-                        json = mapper.writeValueAsString(prodDAO.listarPorOfertante(id));
+                        lista = prodDAO.listarPorOfertante(id);
                     } else if (query != null && query.contains("id=")) {
                         int id = Integer.parseInt(query.split("id=")[1].split("&")[0]);
-                        json = mapper.writeValueAsString(prodDAO.buscarPorId(id));
+                        Producto p = prodDAO.buscarPorId(id);
+                        if (p == null) {
+                            enviarTextoPlano(exchange, 200, "No hay productos registrados con ese ID");
+                            return;
+                        }
+                        enviarRespuesta(exchange, 200, mapper.writeValueAsString(p));
+                        return;
                     } else {
-                        json = mapper.writeValueAsString(prodDAO.listarAprobados());
+                        lista = prodDAO.listarAprobados();
                     }
-                    enviarRespuesta(exchange, 200, json);
+
+                    // CONTROL DE LISTA VACÍA PARA EVITAR LOS CORCHETES []
+                    if (lista == null || lista.isEmpty()) {
+                        enviarTextoPlano(exchange, 200, "No hay productos registrados");
+                    } else {
+                        enviarRespuesta(exchange, 200, mapper.writeValueAsString(lista));
+                    }
+
                 } else if ("POST".equalsIgnoreCase(metodo)) {
                     Producto p = mapper.readValue(exchange.getRequestBody(), Producto.class);
                     p.setEstado("PENDIENTE");
@@ -147,6 +164,7 @@ public class Servidor {
         }
     }
 
+    // ─── HANDLER USUARIOS ───
     static class UsuariosHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -160,7 +178,14 @@ public class Servidor {
 
             try {
                 if ("GET".equalsIgnoreCase(metodo)) {
-                    enviarRespuesta(exchange, 200, mapper.writeValueAsString(userDAO.listar()));
+                    List<Usuario> lista = userDAO.listar();
+                    
+                    // CONTROL DE LISTA VACÍA PARA EVITAR LOS CORCHETES []
+                    if (lista == null || lista.isEmpty()) {
+                        enviarTextoPlano(exchange, 200, "No hay usuarios registrados");
+                    } else {
+                        enviarRespuesta(exchange, 200, mapper.writeValueAsString(lista));
+                    }
                 } else if ("POST".equalsIgnoreCase(metodo)) {
                     Usuario u = mapper.readValue(exchange.getRequestBody(), Usuario.class);
                     boolean ok = userDAO.registrar(u);
@@ -176,12 +201,12 @@ public class Servidor {
                     }
                 }
             } catch (Exception e) {
-                e.printStackTrace();
                 enviarRespuesta(exchange, 500, "{\"error\":\"" + e.getMessage() + "\"}");
             }
         }
     }
 
+    // ─── HELPERS DE RESPUESTA ───
     private static void configurarCORS(HttpExchange exchange) {
         exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
         exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
@@ -200,6 +225,15 @@ public class Servidor {
     private static void enviarRespuestaHTML(HttpExchange exchange, int codigo, String html) throws IOException {
         byte[] bytes = html.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8");
+        exchange.sendResponseHeaders(codigo, bytes.length);
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(bytes);
+        }
+    }
+
+    private static void enviarTextoPlano(HttpExchange exchange, int codigo, String texto) throws IOException {
+        byte[] bytes = texto.getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=UTF-8");
         exchange.sendResponseHeaders(codigo, bytes.length);
         try (OutputStream os = exchange.getResponseBody()) {
             os.write(bytes);
