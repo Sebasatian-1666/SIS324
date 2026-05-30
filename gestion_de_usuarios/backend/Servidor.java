@@ -83,6 +83,13 @@ public class Servidor {
 
                 } else if ("PUT".equalsIgnoreCase(metodo)) {
                     Producto p = mapper.readValue(exchange.getRequestBody(), Producto.class);
+                    
+                    // CORRECCIÓN: Validar que el ID sea correcto antes de mandar al DAO
+                    if (p.getId() <= 0) {
+                        enviarRespuesta(exchange, 400, "{\"error\":\"El ID del producto es obligatorio para actualizar\"}");
+                        return;
+                    }
+                    
                     boolean ok = prodDAO.actualizar(p);
                     enviarRespuesta(exchange, ok ? 200 : 400, "{\"success\":" + ok + "}");
 
@@ -96,7 +103,6 @@ public class Servidor {
                     }
 
                 } else if ("PATCH".equalsIgnoreCase(metodo)) { 
-                    // Esta línea le quita la advertencia al compilador de VS Code
                     @SuppressWarnings("unchecked")
                     Map<String, Object> body = mapper.readValue(exchange.getRequestBody(), Map.class);
     
@@ -119,7 +125,7 @@ public class Servidor {
         }
     }
 
- // ─── HANDLER PARA USUARIOS (Mantiene Sprint 1) ───
+    // ─── HANDLER PARA USUARIOS (Mantiene Sprint 1) ───
     static class UsuariosHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -138,17 +144,11 @@ public class Servidor {
                     Usuario u = mapper.readValue(exchange.getRequestBody(), Usuario.class);
                     boolean ok = userDAO.registrar(u);
                     enviarRespuesta(exchange, ok ? 201 : 400, "{\"success\":" + ok + "}");
-                } 
-                // 🚀 NUEVO: Bloque para capturar y procesar la eliminación de usuarios
-                else if ("DELETE".equalsIgnoreCase(metodo)) {
+                } else if ("DELETE".equalsIgnoreCase(metodo)) {
                     String query = exchange.getRequestURI().getQuery();
                     if (query != null && query.contains("id=")) {
-                        // Extraemos el ID numérico de la URL (?id=X)
                         int id = Integer.parseInt(query.split("id=")[1].split("&")[0]);
-                        
-                        // Usamos userDAO para borrar el usuario real de SQLite
                         boolean ok = userDAO.eliminar(id);
-                        
                         enviarRespuesta(exchange, ok ? 200 : 400, "{\"mensaje\":\"" + (ok ? "Usuario eliminado correctamente" : "No se pudo eliminar") + "\"}");
                     } else {
                         enviarRespuesta(exchange, 400, "{\"mensaje\":\"Falta ID\"}");
@@ -159,6 +159,7 @@ public class Servidor {
             }
         }
     }
+
     // Helpers
     private static void configurarCORS(HttpExchange exchange) {
         exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");

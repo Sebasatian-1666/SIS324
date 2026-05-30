@@ -16,7 +16,7 @@ public class ProductoServiceSpec {
             String sql = "CREATE TABLE IF NOT EXISTS productos ("
                     + " id INTEGER PRIMARY KEY AUTOINCREMENT,"
                     + " titulo TEXT NOT NULL,"
-                    + " descripcion TEXT NOT NULL,"
+                    + " descripcion TEXT NOT NULL," // Sincronizado con base de datos real
                     + " precio REAL NOT NULL,"
                     + " categoria TEXT NOT NULL,"
                     + " tipo TEXT DEFAULT 'PRODUCTO',"
@@ -99,10 +99,12 @@ public class ProductoServiceSpec {
         @DisplayName("SPEC-04 (borde): Una desaprobación (RECHAZADO) exige obligatoriamente un motivo")
         void spec04_rechazoSinMotivoInvalido() {
             String decision = "RECHAZADO";
-            String motivo = ""; // Vacío
+            String motivo = "   "; // Simulación de espacios vacíos o nulos enviados al servidor
 
-            boolean validacionNegocio = !("RECHAZADO".equals(decision) && (motivo == null || motivo.trim().isEmpty()));
-            assertFalse(validacionNegocio, "El flujo debe impedir rechazos sin retroalimentación descriptiva.");
+            // CORRECCIÓN: Validar usando la regla exacta que ejecuta el Servidor en el método PATCH
+            boolean validacionNegocioFalla = ("RECHAZADO".equals(decision) && (motivo == null || motivo.trim().isEmpty()));
+            
+            assertTrue(validacionNegocioFalla, "El flujo debe impedir de forma estricta rechazos sin retroalimentación descriptiva.");
         }
     }
 }
