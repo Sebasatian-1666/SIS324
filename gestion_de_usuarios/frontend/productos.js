@@ -1,12 +1,31 @@
 // ── productos.js – Sprint 2 (HU-01, HU-02, HU-03) ──────────────────────
-// Este archivo se carga DESPUÉS de app.js para tener acceso a
-// usuarioActual, API_PRODUCTOS y mostrarMsg()
+// Mantiene intacta la estructura original pero con persistencia simulada en localStorage
 
 let catalogoCache = [];
 let productoARechazar = null;
 
+// 🧪 Semilla inicial para que la app no aparezca vacía la primera vez
+const PRODUCTOS_SEMILLA = [
+    { id: 1, titulo: "Laptop HP Pavillion", descripcion: "Excelente estado, 16GB de RAM y 512GB SSD.", precio: 650.00, categoria: "Tecnología", tipo: "PRODUCTO", estado: "PENDIENTE", ofertanteId: 1, ofertanteNombre: "Juan Ofertante" },
+    { id: 2, titulo: "Clases de Cálculo I", descripcion: "Clases particulares orientadas a exámenes de la USFX.", precio: 20.00, categoria: "Servicios", tipo: "SERVICIO", estado: "APROBADO", ofertanteId: 1, ofertanteNombre: "Juan Ofertante" }
+];
+
+// 🔄 Helper para sincronizar la base de datos local simulada
+function obtenerProductosLocal() {
+    let prods = localStorage.getItem('productos_simulados');
+    if (!prods) {
+        localStorage.setItem('productos_simulados', JSON.stringify(PRODUCTOS_SEMILLA));
+        prods = JSON.stringify(PRODUCTOS_SEMILLA);
+    }
+    return JSON.parse(prods);
+}
+
+function guardarProductosLocal(arr) {
+    localStorage.setItem('productos_simulados', JSON.stringify(arr));
+}
+
 // ══════════════════════════════════════════════════════════════════════════
-// HU-01 + HU-02: Guardar producto (crear o editar)
+// HU-01 + HU-02: Guardar producto (crear o editar) - MODO FRONTEND
 // ══════════════════════════════════════════════════════════════════════════
 async function guardarProducto() {
     const editId = document.getElementById('prodEditId').value;
@@ -16,10 +35,11 @@ async function guardarProducto() {
         precio:      parseFloat(document.getElementById('prodPrecio').value),
         categoria:   document.getElementById('prodCategoria').value,
         tipo:        document.getElementById('prodTipo').value,
-        ofertanteId: usuarioActual ? usuarioActual.id : 1
+        ofertanteId: usuarioActual ? usuarioActual.id : 1,
+        ofertanteNombre: usuarioActual ? usuarioActual.nombre : "Juan Ofertante"
     };
 
-    // Validaciones básicas
+    // Validaciones básicas intactas
     if (!body.titulo || body.titulo.length < 3) {
         return mostrarMsg('msgProducto', '❌ El título debe tener al menos 3 caracteres', 'err');
     }
@@ -33,58 +53,52 @@ async function guardarProducto() {
         return mostrarMsg('msgProducto', '❌ Selecciona una categoría', 'err');
     }
 
-    try {
-        let res;
-        if (editId) {
-            // HU-02: Editar (PUT)
-            body.id = parseInt(editId);
-            res = await fetch(API_PRODUCTOS, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
-        } else {
-            // HU-01: Crear (POST) → estado siempre PENDIENTE
-            res = await fetch(API_PRODUCTOS, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
-        }
+    let productos = obtenerProductosLocal();
 
-        const data = await res.json();
-        if (res.ok) {
-            mostrarMsg('msgProducto', '✅ ' + data.mensaje, 'ok');
-            cancelarEdicion();
-            cargarMisProductos();
-        } else {
-            mostrarMsg('msgProducto', '❌ ' + data.mensaje, 'err');
+    if (editId) {
+        // HU-02: Editar (Simulado) -> Al editar vuelve a estado PENDIENTE de revisión
+        const idInt = parseInt(editId);
+        const idx = productos.findIndex(p => p.id === idInt);
+        if (idx !== -1) {
+            productos[idx] = { 
+                ...productos[idx], 
+                ...body, 
+                estado: 'PENDIENTE', 
+                motivoRechazo: null 
+            };
+            guardarProductosLocal(productos);
+            mostrarMsg('msgProducto', '✅ Producto actualizado correctamente (En espera de aprobación)', 'ok');
         }
-    } catch (e) {
-        mostrarMsg('msgProducto', '❌ Backend no disponible: ' + e.message, 'err');
+    } else {
+        // HU-01: Crear (Simulado) -> Estado siempre PENDIENTE inicialmente
+        body.id = productos.length > 0 ? Math.max(...productos.map(p => p.id)) + 1 : 1;
+        body.estado = 'PENDIENTE';
+        productos.push(body);
+        guardarProductosLocal(productos);
+        mostrarMsg('msgProducto', '✅ Producto registrado. Pendiente de aprobación.', 'ok');
     }
+
+    cancelarEdicion();
+    cargarMisProductos();
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// HU-02: Cargar mis productos (por ofertanteId)
+// HU-02: Cargar mis productos (por ofertanteId) - MODO FRONTEND
 // ══════════════════════════════════════════════════════════════════════════
 async function cargarMisProductos() {
     const ofId = usuarioActual ? usuarioActual.id : 1;
     const cont = document.getElementById('listaOfertante');
+    if (!cont) return;
+    
     cont.innerHTML = '<p style="color:var(--muted);font-size:.88rem">Cargando...</p>';
 
-    try {
-        const res  = await fetch(`${API_PRODUCTOS}?ofertanteId=${ofId}`);
-        const list = await res.json();
+    let list = obtenerProductosLocal().filter(p => p.ofertanteId === ofId);
 
-        if (list.length === 0) {
-            cont.innerHTML = '<p style="color:var(--muted);font-size:.88rem">No tienes productos registrados aún.</p>';
-            return;
-        }
-        cont.innerHTML = list.map(prodCardOfertante).join('');
-    } catch (e) {
-        cont.innerHTML = `<p style="color:var(--danger);font-size:.88rem">Error: ${e.message}</p>`;
+    if (list.length === 0) {
+        cont.innerHTML = '<p style="color:var(--muted);font-size:.88rem">No tienes productos registrados aún.</p>';
+        return;
     }
+    cont.innerHTML = list.map(prodCardOfertante).join('');
 }
 
 function prodCardOfertante(p) {
@@ -129,44 +143,36 @@ function cancelarEdicion() {
 
 async function eliminarProducto(id) {
     if (!confirm('¿Eliminar este producto?')) return;
-    try {
-        const res = await fetch(`${API_PRODUCTOS}?id=${id}`, { method: 'DELETE' });
-        const data = await res.json();
-        mostrarMsg('msgProducto', res.ok ? '✅ ' + data.mensaje : '❌ ' + data.mensaje,
-                   res.ok ? 'ok' : 'err');
-        cargarMisProductos();
-    } catch (e) {
-        mostrarMsg('msgProducto', '❌ Error al eliminar', 'err');
-    }
+    
+    let productos = obtenerProductosLocal().filter(p => p.id !== id);
+    guardarProductosLocal(productos);
+    
+    mostrarMsg('msgProducto', '✅ Producto eliminado correctamente', 'ok');
+    cargarMisProductos();
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// HU-03: Panel Admin – listar pendientes + aprobar/rechazar
+// HU-03: Panel Admin – listar pendientes + aprobar/rechazar - MODO FRONTEND
 // ══════════════════════════════════════════════════════════════════════════
 async function cargarAdmin() {
     const cont = document.getElementById('listaAdmin');
+    if (!cont) return;
+    
     cont.innerHTML = '<p style="color:var(--muted);font-size:.88rem">Cargando...</p>';
 
-    try {
-        // Cargamos todos para las estadísticas
-        const [todos, pendientes] = await Promise.all([
-            fetch(API_PRODUCTOS).then(r => r.json()),
-            fetch(`${API_PRODUCTOS}?estado=PENDIENTE`).then(r => r.json())
-        ]);
+    let todos = obtenerProductosLocal();
+    let pendientes = todos.filter(p => p.estado === 'PENDIENTE');
 
-        // Stats
-        document.getElementById('cntPend').textContent = todos.filter(p => p.estado === 'PENDIENTE').length;
-        document.getElementById('cntApr').textContent  = todos.filter(p => p.estado === 'APROBADO').length;
-        document.getElementById('cntRech').textContent = todos.filter(p => p.estado === 'RECHAZADO').length;
+    // Actualización dinámica de los contadores en las tarjetas de estadísticas
+    if(document.getElementById('cntPend')) document.getElementById('cntPend').textContent = pendientes.length;
+    if(document.getElementById('cntApr'))  document.getElementById('cntApr').textContent  = todos.filter(p => p.estado === 'APROBADO').length;
+    if(document.getElementById('cntRech')) document.getElementById('cntRech').textContent = todos.filter(p => p.estado === 'RECHAZADO').length;
 
-        if (pendientes.length === 0) {
-            cont.innerHTML = '<p style="color:var(--muted);font-size:.88rem">✅ No hay productos pendientes de revisión.</p>';
-            return;
-        }
-        cont.innerHTML = pendientes.map(prodCardAdmin).join('');
-    } catch (e) {
-        cont.innerHTML = `<p style="color:var(--danger);font-size:.88rem">Error: ${e.message}</p>`;
+    if (pendientes.length === 0) {
+        cont.innerHTML = '<p style="color:var(--muted);font-size:.88rem">✅ No hay productos pendientes de revisión.</p>';
+        return;
     }
+    cont.innerHTML = pendientes.map(prodCardAdmin).join('');
 }
 
 function prodCardAdmin(p) {
@@ -178,7 +184,7 @@ function prodCardAdmin(p) {
             <span class="prod-precio">$${parseFloat(p.precio).toFixed(2)}</span>
             <span class="badge b-info">${p.categoria}</span>
         </div>
-        <div style="font-size:.78rem;color:var(--muted)">👤 ${p.ofertanteNombre}</div>
+        <div style="font-size:.78rem;color:var(--muted)">👤 ${p.ofertanteNombre || 'Ofertante'}</div>
         <div class="prod-actions">
             <button class="btn-success btn-sm" onclick="aprobar(${p.id})">✅ Aprobar</button>
             <button class="btn-danger  btn-sm" onclick="abrirModalRechazo(${p.id})">❌ Rechazar</button>
@@ -187,16 +193,16 @@ function prodCardAdmin(p) {
 }
 
 async function aprobar(id) {
-    try {
-        const res = await fetch(API_PRODUCTOS, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id, decision: 'APROBADO' })
-        });
-        const data = await res.json();
-        alert('✅ ' + data.mensaje);
+    let productos = obtenerProductosLocal();
+    const idx = productos.findIndex(p => p.id === id);
+    
+    if (idx !== -1) {
+        productos[idx].estado = 'APROBADO';
+        productos[idx].motivoRechazo = null; // Limpia si tenía rechazos previos
+        guardarProductosLocal(productos);
+        alert('✅ Producto aprobado correctamente.');
         cargarAdmin();
-    } catch (e) { alert('Error: ' + e.message); }
+    }
 }
 
 function abrirModalRechazo(id) {
@@ -209,17 +215,18 @@ async function confirmarRechazo() {
     const motivo = document.getElementById('motivoTexto').value.trim();
     if (!motivo) { alert('Debes escribir el motivo del rechazo.'); return; }
 
-    try {
-        const res = await fetch(API_PRODUCTOS, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: productoARechazar, decision: 'RECHAZADO', motivoRechazo: motivo })
-        });
-        const data = await res.json();
-        alert(res.ok ? '✅ ' + data.mensaje : '❌ ' + data.mensaje);
+    let productos = obtenerProductosLocal();
+    const idx = productos.findIndex(p => p.id === productoARechazar);
+    
+    if (idx !== -1) {
+        productos[idx].estado = 'RECHAZADO';
+        productos[idx].motivoRechazo = motivo;
+        guardarProductosLocal(productos);
+        
+        alert('❌ Producto rechazado con éxito.');
         cerrarModal();
         cargarAdmin();
-    } catch (e) { alert('Error: ' + e.message); }
+    }
 }
 
 function cerrarModal() {
@@ -228,27 +235,31 @@ function cerrarModal() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// Catálogo público (solo APROBADOS)
+// Catálogo público (solo APROBADOS) - MODO FRONTEND
 // ══════════════════════════════════════════════════════════════════════════
 async function cargarCatalogo() {
     const cont = document.getElementById('listaCatalogo');
+    if (!cont) return;
+    
     cont.innerHTML = '<p style="color:var(--muted);font-size:.88rem">Cargando...</p>';
-    try {
-        catalogoCache = await fetch(`${API_PRODUCTOS}?estado=APROBADO`).then(r => r.json());
-        filtrarCatalogo();
-    } catch (e) {
-        cont.innerHTML = `<p style="color:var(--danger);font-size:.88rem">Error: ${e.message}</p>`;
-    }
+    
+    // Filtramos directamente los aprobados de la persistencia local
+    catalogoCache = obtenerProductosLocal().filter(p => p.estado === 'APROBADO');
+    filtrarCatalogo();
 }
 
 function filtrarCatalogo() {
     const txt = document.getElementById('buscar').value.toLowerCase();
     const cat = document.getElementById('filtroCat').value;
+    
     const filtrados = catalogoCache.filter(p =>
         (p.titulo.toLowerCase().includes(txt) || p.descripcion.toLowerCase().includes(txt)) &&
         (!cat || p.categoria === cat)
     );
+    
     const cont = document.getElementById('listaCatalogo');
+    if (!cont) return;
+
     if (filtrados.length === 0) {
         cont.innerHTML = '<p style="color:var(--muted);font-size:.88rem">No se encontraron productos.</p>';
         return;
@@ -263,7 +274,7 @@ function filtrarCatalogo() {
             <div class="prod-desc">${p.descripcion}</div>
             <div class="prod-meta">
                 <span class="prod-precio">$${parseFloat(p.precio).toFixed(2)}</span>
-                <span style="font-size:.78rem;color:var(--muted)">👤 ${p.ofertanteNombre}</span>
+                <span style="font-size:.78rem;color:var(--muted)">👤 ${p.ofertanteNombre || 'Anónimo'}</span>
             </div>
         </div>`).join('');
 }

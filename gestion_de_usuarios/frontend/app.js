@@ -79,10 +79,17 @@ function switchTab(nombre, btn) {
 }
 
 // ── Usuarios (Sprint 1) ───────────────────────────────────────────────────
+// Cambia tu función cargarUsuarios por esta que lee de localStorage o del arreglo DEMO
 async function cargarUsuarios() {
     try {
-        const res   = await fetch(API_URL);
-        const users = await res.json();
+        // Intentamos leer de localStorage, si no hay nada, inicializamos con los DEMO
+        let usuarios = localStorage.getItem('usuarios_simulados');
+        if (!usuarios) {
+            localStorage.setItem('usuarios_simulados', JSON.stringify(USUARIOS_DEMO));
+            usuarios = JSON.stringify(USUARIOS_DEMO);
+        }
+        const users = JSON.parse(usuarios);
+        
         const tbody = document.getElementById('usersTableBody');
         tbody.innerHTML = users.map(u => `
             <tr>
@@ -95,62 +102,54 @@ async function cargarUsuarios() {
                 </td>
             </tr>`).join('');
     } catch (e) {
-        console.warn('Backend no disponible – modo offline', e);
-        document.getElementById('usersTableBody').innerHTML =
-            '<tr><td colspan="5" style="text-align:center;color:#aaa">Backend no conectado</td></tr>';
+        console.error('Error al cargar usuarios simulados', e);
     }
 }
 
 // Cambia "async function crearUsuario() {" por:
 window.crearUsuario = async function() {
-    // Solo enviamos los 4 campos reales de tu base de datos en orden
-    const body = {
-        id: 0, 
-        nombre: document.getElementById('createNombre').value.trim(),
-        email: document.getElementById('createEmail').value.trim(),
-        password: document.getElementById('createPassword').value
-    };
+    const nombre = document.getElementById('createNombre').value.trim();
+    const email = document.getElementById('createEmail').value.trim();
+    const password = document.getElementById('createPassword').value;
+    const rol = document.getElementById('createRol').value;
 
-    if (!body.nombre || !body.email || !body.password) {
+    if (!nombre || !email || !password) {
         return mostrarMsg('msgUsuario', '❌ Todos los campos son obligatorios', 'err');
     }
 
-    try {
-        const res = await fetch(API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
-        const data = await res.json();
+    // Lógica simulada de guardado
+    let usuarios = JSON.parse(localStorage.getItem('usuarios_simulados') || JSON.stringify(USUARIOS_DEMO));
+    
+    // Verificar si el correo ya existe
+    if (usuarios.some(u => u.email === email)) {
+        return mostrarMsg('msgUsuario', '❌ El correo ya está registrado', 'err');
+    }
 
-        if (res.ok) {
-            mostrarMsg('msgUsuario', '✅ ' + (data.mensaje || 'Usuario creado correctamente'), 'ok');
-            ['createNombre', 'createEmail', 'createPassword'].forEach(id => document.getElementById(id).value = '');
-            cargarUsuarios(); 
-        } else {
-            mostrarMsg('msgUsuario', '❌ ' + (data.mensaje || 'Error al crear'), 'err');
-        }
-    } catch (e) {
-        mostrarMsg('msgUsuario', '❌ Backend no disponible', 'err');
-    } 
+    const nuevoUsuario = {
+        id: usuarios.length > 0 ? Math.max(...usuarios.map(u => u.id)) + 1 : 1,
+        nombre,
+        email,
+        password,
+        rol
+    };
+
+    usuarios.push(nuevoUsuario);
+    localStorage.setItem('usuarios_simulados', JSON.stringify(usuarios));
+
+    mostrarMsg('msgUsuario', '✅ Usuario creado correctamente (Simulado)', 'ok');
+    ['createNombre', 'createEmail', 'createPassword'].forEach(id => document.getElementById(id).value = '');
+    cargarUsuarios(); 
 };
 
-// ✅ PEGA ESTO:
 window.eliminarUsuario = async function(id) {
     if (!confirm('¿Realmente deseas eliminar este usuario?')) return;
-    try {
-        const res = await fetch(API_URL + '?id=' + id, { method: 'DELETE' });
-        if (res.ok) {
-            mostrarMsg('msgUsuario', '✅ Usuario eliminado correctamente', 'ok');
-            cargarUsuarios();
-        } else {
-            const data = await res.json();
-            mostrarMsg('msgUsuario', '❌ ' + (data.mensaje || 'No se pudo eliminar'), 'err');
-        }
-    } catch (e) { 
-        console.error(e);
-        mostrarMsg('msgUsuario', '❌ Error: Backend no disponible', 'err');
-    }
+    
+    let usuarios = JSON.parse(localStorage.getItem('usuarios_simulados') || '[]');
+    usuarios = usuarios.filter(u => u.id !== id);
+    localStorage.setItem('usuarios_simulados', JSON.stringify(usuarios));
+    
+    mostrarMsg('msgUsuario', '✅ Usuario eliminado correctamente', 'ok');
+    cargarUsuarios();
 };
 
 // ── Utilidad ──────────────────────────────────────────────────────────────
