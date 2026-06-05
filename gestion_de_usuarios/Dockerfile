@@ -12,8 +12,11 @@ COPY . .
 
 RUN rm -rf bin && mkdir -p bin
 
-# 💡 Compilamos de manera explícita apuntando a las carpetas fuentes, ignorando los tests
-RUN javac -cp "lib/*" -d bin --release 17 backend/*.java gestion_de_usuarios/*.java 2>/dev/null || javac -cp "lib/*" -d bin --release 17 backend/*.java
+# 🔥 SOLUCIÓN MAESTRA: Eliminamos físicamente cualquier archivo de pruebas (spec) para que no interfiera en producción
+RUN find . -iname "*spec.java" -delete
+
+# 💡 Compilamos con el classpath apuntando a la raíz "." para que los paquetes se reconozcan entre sí
+RUN javac -cp ".:lib/*" -d bin --release 17 backend/*.java
 
 EXPOSE 8080
 
