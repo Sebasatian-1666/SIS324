@@ -9,24 +9,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * DAO de Productos/Servicios - Sprint 2
+ * DAO de Productos/Servicios - Sprint 3
  * Usa SQLite + JDBC puro, igual que UsuarioDAO.
- *
- * Métodos:
- *   crearTabla()          → crea tabla si no existe (llama al iniciar)
- *   registrar(Producto)   → HU-01: inserta con estado PENDIENTE
- *   listar()              → lista todos
- *   listarPendientes()    → HU-03: solo estado PENDIENTE
- *   listarAprobados()     → catálogo público
- *   listarPorOfertante()  → mis productos
- *   buscarPorId()         → un producto
- *   actualizar(Producto)  → HU-02: edita y resetea a PENDIENTE si campos críticos cambiaron
- *   validar(id, decision, motivo) → HU-03: Admin aprueba o rechaza
- *   eliminar(id)          → HU-02: elimina
  */
 public class ProductoDAO {
 
-    // ── Inicialización de tabla ──────────────────────────────────────────
+    // ── Inicialización de tabla (Modificado para Sprint 3) ────────────────
     public void crearTabla() {
         String sql = "CREATE TABLE IF NOT EXISTS productos ("
                 + " id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -38,6 +26,8 @@ public class ProductoDAO {
                 + " estado TEXT NOT NULL DEFAULT 'PENDIENTE',"
                 + " motivo_rechazo TEXT,"
                 + " ofertante_id INTEGER NOT NULL,"
+                + " contador_solicitudes INTEGER DEFAULT 0," // Novedad Sprint 3
+                + " calificacion REAL DEFAULT 0.0,"          // Novedad Sprint 3
                 + " FOREIGN KEY (ofertante_id) REFERENCES usuarios(id)"
                 + ");";
         try (Connection con = Conexion.conectar();
@@ -51,8 +41,8 @@ public class ProductoDAO {
 
     // ── HU-01: Registrar Producto (estado siempre PENDIENTE) ─────────────
     public boolean registrar(Producto p) {
-        String sql = "INSERT INTO productos (titulo, descripcion, precio, categoria, tipo, estado, ofertante_id) "
-                + "VALUES (?, ?, ?, ?, ?, 'PENDIENTE', ?)";
+        String sql = "INSERT INTO productos (titulo, descripcion, precio, categoria, tipo, estado, ofertante_id, contador_solicitudes, calificacion) "
+                + "VALUES (?, ?, ?, ?, ?, 'PENDIENTE', ?, 0, 0.0)";
         try (Connection con = Conexion.conectar();
              PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, p.getTitulo());
@@ -69,14 +59,12 @@ public class ProductoDAO {
     }
 
     // ── HU-02: Editar Producto ────────────────────────────────────────────
-    // Si título, descripción o precio cambian → vuelve a PENDIENTE
     public boolean actualizar(Producto nuevo) {
-        // Primero obtenemos el estado actual para comparar
         Producto actual = buscarPorId(nuevo.getId());
         if (actual == null) return false;
 
         boolean cambiosCriticos =
-                !actual.getTitulo().equals(nuevo.getTitulo())            ||
+                !actual.getTitulo().equals(nuevo.getTitulo())        ||
                 !actual.getDescripcion().equals(nuevo.getDescripcion())  ||
                 actual.getPrecio() != nuevo.getPrecio();
 
@@ -117,7 +105,6 @@ public class ProductoDAO {
 
     // ── HU-03: Validar Producto (Admin aprueba o rechaza) ─────────────────
     public boolean validar(int id, String decision, String motivoRechazo) {
-        // Solo se puede validar si está PENDIENTE
         Producto actual = buscarPorId(id);
         if (actual == null) return false;
         if (!"PENDIENTE".equals(actual.getEstado())) {
@@ -138,7 +125,7 @@ public class ProductoDAO {
         }
     }
 
-    // ── Consultas ─────────────────────────────────────────────────────────
+    // ── Consultas del Catálogo Público ─────────────────────────────────────
 
     public List<Producto> listar() {
         return listarConFiltro(null);
@@ -150,6 +137,37 @@ public class ProductoDAO {
 
     public List<Producto> listarAprobados() {
         return listarConFiltro("APROBADO");
+    }
+
+    // Funcionalidad 1 (Sprint 3): Catálogo de Aprobados Ordenado Dinámicamente
+    public List<Producto> listarAprobadosConFiltro(String orden) {
+        List<Producto> lista = new ArrayList<>();
+        
+        // El orden por defecto de la consulta base es "recientes" (ID más alto primero)
+        String ordenSql = "ORDER BY p.id DESC";
+        
+        if ("utilizados".equalsIgnoreCase(orden)) {
+            ordenSql = "ORDER BY p.contador_solicitudes DESC";
+        } else if ("calificados".equalsIgnoreCase(orden)) {
+            ordenSql = "ORDER BY p.calificacion DESC";
+        }
+
+        String sql = "SELECT p.*, u.nombre as ofertante_nombre "
+                + "FROM productos p "
+                + "JOIN usuarios u ON p.ofertante_id = u.id "
+                + "WHERE p.estado = 'APROBADO' " 
+                + ordenSql;
+
+        try (Connection con = Conexion.conectar();
+             PreparedStatement ps = con.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                lista.add(mapear(rs));
+            }
+        } catch (SQLException e) {
+            System.out.println("Error al listar aprobados con filtros: " + e.getMessage());
+        }
+        return lista;
     }
 
     public List<Producto> listarPorOfertante(int ofertanteId) {
@@ -220,7 +238,9 @@ public class ProductoDAO {
                 rs.getString("estado"),
                 rs.getString("motivo_rechazo"),
                 rs.getInt("ofertante_id"),
-                rs.getString("ofertante_nombre")
+                rs.getString("ofertante_nombre"),
+                rs.getInt("contador_solicitudes"), // Sprint 3
+                rs.getDouble("calificacion")       // Sprint 3
         );
     }
 }

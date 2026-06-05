@@ -1,12 +1,11 @@
 package backend;
 
 /**
- * Entidad Producto/Servicio - Sprint 2
- * 
- * Estados de validación (HU-03):
- *   PENDIENTE  → estado inicial al crear o editar campos críticos
- *   APROBADO   → validado por el Administrador
- *   RECHAZADO  → rechazado por el Administrador
+ * Entidad Producto/Servicio - Sprint 3
+ * * Estados de validación (HU-03):
+ * PENDIENTE  → estado inicial al crear o editar campos críticos
+ * APROBADO   → validado por el Administrador
+ * RECHAZADO  → rechazado por el Administrador
  */
 public class Producto {
 
@@ -20,6 +19,10 @@ public class Producto {
     private String motivoRechazo;
     private int ofertanteId;        // FK → usuarios.id
     private String ofertanteNombre; // para mostrar en frontend (JOIN)
+    
+    // Novedad Sprint 3: Atributos para filtros de búsqueda
+    private int contadorSolicitudes; 
+    private double calificacion;     
 
     // ── Constructor vacío ────────────────────────────────────────────────
     public Producto() {}
@@ -38,6 +41,27 @@ public class Producto {
         this.motivoRechazo  = motivoRechazo;
         this.ofertanteId    = ofertanteId;
         this.ofertanteNombre = ofertanteNombre;
+        this.contadorSolicitudes = 0; // Por defecto al mapear base de datos vieja
+        this.calificacion   = 0.0;
+    }
+
+    // Constructor completo extendido para Sprint 3 (opcional para DAOs nuevos)
+    public Producto(int id, String titulo, String descripcion, double precio,
+                    String categoria, String tipo, String estado,
+                    String motivoRechazo, int ofertanteId, String ofertanteNombre,
+                    int contadorSolicitudes, double calificacion) {
+        this.id             = id;
+        this.titulo         = titulo;
+        this.descripcion    = descripcion;
+        this.precio         = precio;
+        this.categoria      = categoria;
+        this.tipo           = tipo;
+        this.estado         = estado;
+        this.motivoRechazo  = motivoRechazo;
+        this.ofertanteId    = ofertanteId;
+        this.ofertanteNombre = ofertanteNombre;
+        this.contadorSolicitudes = contadorSolicitudes;
+        this.calificacion   = calificacion;
     }
 
     // ── Constructor para crear (sin id, estado siempre PENDIENTE) ────────
@@ -50,6 +74,8 @@ public class Producto {
         this.tipo        = tipo;
         this.ofertanteId = ofertanteId;
         this.estado      = "PENDIENTE"; // HU-01: siempre PENDIENTE al crear
+        this.contadorSolicitudes = 0;
+        this.calificacion = 0.0;
     }
 
     // ── Getters y Setters ────────────────────────────────────────────────
@@ -82,6 +108,12 @@ public class Producto {
 
     public String getOfertanteNombre()          { return ofertanteNombre; }
     public void setOfertanteNombre(String on)   { this.ofertanteNombre = on; }
+
+    public int getContadorSolicitudes()         { return contadorSolicitudes; }
+    public void setContadorSolicitudes(int c)   { this.contadorSolicitudes = c; }
+
+    public double getCalificacion()             { return calificacion; }
+    public void setCalificacion(double c)       { this.calificacion = c; }
 
     @Override
     public String toString() {

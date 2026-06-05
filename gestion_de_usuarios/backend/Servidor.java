@@ -15,6 +15,7 @@ public class Servidor {
 
     private static final ProductoDAO prodDAO = new ProductoDAO();
     private static final UsuarioDAO userDAO = new UsuarioDAO();
+    private static final SolicitudDAO solDAO = new SolicitudDAO(); // Novedad Sprint 3
     private static final ObjectMapper mapper = new ObjectMapper();
 
     public static void main(String[] args) throws IOException {
@@ -24,6 +25,7 @@ public class Servidor {
             System.out.println("⏳ Inicializando tablas en la base de datos...");
             prodDAO.crearTabla();
             userDAO.crearTabla();
+            solDAO.crearTabla(); // Novedad Sprint 3
             System.out.println("✅ Tablas verificadas/creadas con éxito.");
         } catch (Exception e) {
             System.out.println("🚨 ERROR AL INICIALIZAR LA BASE DE DATOS:");
@@ -39,6 +41,7 @@ public class Servidor {
         server.createContext("/", new RootHandler());
         server.createContext("/api/productos", new ProductosHandler());
         server.createContext("/api/usuarios", new UsuariosHandler());
+        server.createContext("/api/solicitudes", new SolicitudesHandler()); // Novedad Sprint 3
 
         server.setExecutor(null);
         System.out.println("🚀 Servidor HTTP corriendo en el puerto: " + puerto);
@@ -61,7 +64,7 @@ public class Servidor {
                           "<html lang='es'>" +
                           "<head>" +
                           "<meta charset='UTF-8'>" +
-                          "<title>Menú Principal</title>" +
+                          "<title>Menú Principal - Sprint 3</title>" +
                           "<style>" +
                           "body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; background-color: #f4f4f4; }" +
                           "h1 { color: #333; }" +
@@ -70,10 +73,11 @@ public class Servidor {
                           "</style>" +
                           "</head>" +
                           "<body>" +
-                          "<h1>Bienvenido a la Aplicación</h1>" +
+                          "<h1>Bienvenido a la Aplicación (Sprint 3)</h1>" +
                           "<p>Selecciona una opción para continuar:</p>" +
                           "<a href='/api/productos'>Ver Productos</a>" +
                           "<a href='/api/usuarios'>Ver Usuarios</a>" +
+                          "<a href='/api/solicitudes'>Ver Solicitudes</a>" +
                           "</body>" +
                           "</html>";
             
@@ -81,7 +85,7 @@ public class Servidor {
         }
     }
 
-    // ─── HANDLER PRODUCTOS ───
+    // ─── HANDLER PRODUCTOS (Modificado para Funcionalidad 1) ───
     static class ProductosHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -103,6 +107,10 @@ public class Servidor {
                     } else if (query != null && query.contains("ofertanteId=")) {
                         int id = Integer.parseInt(query.split("ofertanteId=")[1].split("&")[0]);
                         lista = prodDAO.listarPorOfertante(id);
+                    } else if (query != null && query.contains("orden=")) { 
+                        // F1: Búsqueda con filtros dinámicos (?orden=recientes, ?orden=utilizados, ?orden=calificados)
+                        String orden = query.split("orden=")[1].split("&")[0];
+                        lista = prodDAO.listarAprobadosConFiltro(orden);
                     } else if (query != null && query.contains("id=")) {
                         int id = Integer.parseInt(query.split("id=")[1].split("&")[0]);
                         Producto p = prodDAO.buscarPorId(id);
@@ -113,10 +121,10 @@ public class Servidor {
                         enviarRespuesta(exchange, 200, mapper.writeValueAsString(p));
                         return;
                     } else {
-                        lista = prodDAO.listarAprobados();
+                        // Por defecto devuelve los aprobados ordenados por los más recientes
+                        lista = prodDAO.listarAprobadosConFiltro("recientes");
                     }
 
-                    // CONTROL DE LISTA VACÍA PARA EVITAR LOS CORCHETES []
                     if (lista == null || lista.isEmpty()) {
                         enviarTextoPlano(exchange, 200, "No hay productos registrados");
                     } else {
@@ -164,6 +172,66 @@ public class Servidor {
         }
     }
 
+    // ─── HANDLER SOLICITUDES (Novedad Sprint 3 - Funcionalidades 2 y 3) ───
+    static class SolicitudesHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            configurarCORS(exchange);
+            String metodo = exchange.getRequestMethod();
+            String query = exchange.getRequestURI().getQuery();
+
+            if ("OPTIONS".equalsIgnoreCase(metodo)) {
+                exchange.sendResponseHeaders(204, -1);
+                return;
+            }
+
+            try {
+                if ("POST".equalsIgnoreCase(metodo)) {
+                    // Funcionalidad 2: Solicitar un Producto/Servicio (Demandante)
+                    Solicitud s = mapper.readValue(exchange.getRequestBody(), Solicitud.class);
+                    s.setEstado("PENDIENTE"); // Toda solicitud empieza pendiente de evaluación
+                    boolean ok = solDAO.registrar(s);
+                    enviarRespuesta(exchange, ok ? 201 : 400, "{\"success\":" + ok + "}");
+
+                } else if ("GET".equalsIgnoreCase(metodo)) {
+                    // Funcionalidad 3: Visualizar solicitudes recibidas por el Ofertante
+                    if (query != null && query.contains("ofertanteId=")) {
+                        int ofertanteId = Integer.parseInt(query.split("ofertanteId=")[1].split("&")[0]);
+                        List<Solicitud> lista = solDAO.listarPorOfertante(ofertanteId);
+                        
+                        if (lista == null || lista.isEmpty()) {
+                            enviarTextoPlano(exchange, 200, "No hay solicitudes para tus ofertas");
+                        } else {
+                            enviarRespuesta(exchange, 200, mapper.writeValueAsString(lista));
+                        }
+                    } else {
+                        enviarRespuesta(exchange, 400, "{\"error\":\"El parámetro ofertanteId es requerido\"}");
+                    }
+
+                } else if ("PATCH".equalsIgnoreCase(metodo)) {
+                    // Funcionalidad 3: Ofertante acepta o rechaza el pedido
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> body = mapper.readValue(exchange.getRequestBody(), Map.class);
+                    int id = (Integer) body.get("id");
+                    String nuevoEstado = (String) body.get("estado"); // "ACEPTADA" o "RECHAZADA"
+
+                    if (!"ACEPTADA".equals(nuevoEstado) && !"RECHAZADA".equals(nuevoEstado)) {
+                        enviarRespuesta(exchange, 400, "{\"error\":\"Estado no válido. Use ACEPTADA o RECHAZADA\"}");
+                        return;
+                    }
+
+                    boolean ok = solDAO.responder(id, nuevoEstado);
+                    enviarRespuesta(exchange, ok ? 200 : 400, "{\"success\":" + ok + "}");
+                } else {
+                    enviarRespuesta(exchange, 405, "{\"error\":\"Método no soportado\"}");
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                enviarRespuesta(exchange, 500, "{\"error\":\"" + e.getMessage() + "\"}");
+            }
+        }
+    }
+
     // ─── HANDLER USUARIOS ───
     static class UsuariosHandler implements HttpHandler {
         @Override
@@ -179,8 +247,6 @@ public class Servidor {
             try {
                 if ("GET".equalsIgnoreCase(metodo)) {
                     List<Usuario> lista = userDAO.listar();
-                    
-                    // CONTROL DE LISTA VACÍA PARA EVITAR LOS CORCHETES []
                     if (lista == null || lista.isEmpty()) {
                         enviarTextoPlano(exchange, 200, "No hay usuarios registrados");
                     } else {
