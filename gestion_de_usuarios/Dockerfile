@@ -12,11 +12,11 @@ COPY . .
 
 RUN rm -rf bin && mkdir -p bin
 
-# 🔥 SOLUCIÓN MAESTRA: Eliminamos físicamente cualquier archivo de pruebas (spec) para que no interfiera en producción
+# 1. Borramos los archivos de prueba para evitar ruido
 RUN find . -iname "*spec.java" -delete
 
-# 💡 Compilamos con el classpath apuntando a la raíz "." para que los paquetes se reconozcan entre sí
-RUN javac -cp ".:lib/*" -d bin --release 17 backend/*.java
+# 2. Compilación inteligente: Compilamos desde el Servidor y dejamos que busque sus dependencias con -sourcepath
+RUN javac -cp "lib/*" -sourcepath . -d bin --release 17 backend/Servidor.java
 
 EXPOSE 8080
 

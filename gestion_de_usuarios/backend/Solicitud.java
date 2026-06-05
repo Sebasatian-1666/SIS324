@@ -1,3 +1,4 @@
+package backend;
 /**
  * Entidad Solicitud - Sprint 3
  * * Representa el flujo de interacción entre demandante y ofertante.
