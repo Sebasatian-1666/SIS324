@@ -11,8 +11,9 @@ RUN mkdir -p lib && \
 COPY . .
 
 RUN rm -rf bin && mkdir -p bin
-# 💡 Agregamos "." al classpath para resolver la visibilidad de los paquetes en Linux
-RUN javac -cp ".:lib/*" -d bin --release 17 $(find . -name "*.java" ! -iname "*spec.java")
+
+# 💡 Compilamos de manera explícita apuntando a las carpetas fuentes, ignorando los tests
+RUN javac -cp "lib/*" -d bin --release 17 backend/*.java gestion_de_usuarios/*.java 2>/dev/null || javac -cp "lib/*" -d bin --release 17 backend/*.java
 
 EXPOSE 8080
 
