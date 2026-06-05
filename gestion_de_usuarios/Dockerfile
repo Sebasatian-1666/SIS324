@@ -11,8 +11,8 @@ RUN mkdir -p lib && \
 COPY . .
 
 RUN rm -rf bin && mkdir -p bin
-# 💡 CORRECCIÓN EXTRA: -iname ignora mayúsculas/minúsculas en el Spec de pruebas
-RUN javac -cp "lib/*" -d bin --release 17 $(find . -name "*.java" ! -iname "*spec.java")
+# 💡 Agregamos "." al classpath para resolver la visibilidad de los paquetes en Linux
+RUN javac -cp ".:lib/*" -d bin --release 17 $(find . -name "*.java" ! -iname "*spec.java")
 
 EXPOSE 8080
 
