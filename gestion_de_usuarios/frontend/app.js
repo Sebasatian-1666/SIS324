@@ -1,17 +1,20 @@
-// ── Configuración ────────────────────────────────────────────────────────
-// Cambia esta URL a tu backend en Render cuando hagas deploy
-const API_URL        = 'http://localhost:8080/api/usuarios';
-const API_PRODUCTOS  = 'http://localhost:8080/api/productos';
-
-// ── Estado de sesión (simulado, como en tu Sprint 1) ─────────────────────
-// En el Sprint 1 usabas localStorage con credenciales hardcodeadas.
-// Aquí ampliamos para soportar roles: OFERTANTE y ADMINISTRADOR.
+// ── Configuración (Mocks del Frontend) ───────────────────────────────────
 const USUARIOS_DEMO = [
     { id: 1, nombre: 'Juan Ofertante', email: 'juan@test.com',   password: '123456',   rol: 'OFERTANTE' },
-    { id: 2, nombre: 'Admin Sistema',  email: 'admin@test.com',  password: 'admin123', rol: 'ADMINISTRADOR' },
+    { id: 2, nombre: 'Admin Sistema',  email: 'admin@test.com',   password: 'admin123', rol: 'ADMINISTRADOR' },
 ];
 
 let usuarioActual = null;
+
+// Helper para obtener la lista global de usuarios simulación
+function obtenerUsuariosLocal() {
+    let usuarios = localStorage.getItem('usuarios_simulados');
+    if (!usuarios) {
+        localStorage.setItem('usuarios_simulados', JSON.stringify(USUARIOS_DEMO));
+        return USUARIOS_DEMO;
+    }
+    return JSON.parse(usuarios);
+}
 
 // ── Inicialización ────────────────────────────────────────────────────────
 function checkAuth() {
@@ -39,14 +42,16 @@ function mostrarApp() {
     cargarUsuarios();
 }
 
-// ── Login ─────────────────────────────────────────────────────────────────
+// ── Login Simulado ────────────────────────────────────────────────────────
 document.getElementById('loginForm').addEventListener('submit', (e) => {
     e.preventDefault();
-    const email    = document.getElementById('loginEmail').value;
+    const email    = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
 
-    // Login simulado (igual que tu Sprint 1, ampliado con roles)
-    const user = USUARIOS_DEMO.find(u => u.email === email && u.password === password);
+    // LEER DE LOCALSTORAGE: Así reconoce cuentas creadas dinámicamente
+    const listaUsuarios = obtenerUsuariosLocal();
+    const user = listaUsuarios.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
+    
     if (user) {
         usuarioActual = user;
         localStorage.setItem('userSession', JSON.stringify(user));
@@ -72,25 +77,22 @@ function switchTab(nombre, btn) {
     document.getElementById('tab-' + nombre).classList.add('active');
     btn.classList.add('active');
 
-    if (nombre === 'ofertante') cargarMisProductos();
-    if (nombre === 'admin')     cargarAdmin();
+    if (nombre === 'ofertante') {
+        cargarMisProductos();
+        if (typeof cargarSolicitudesOfertante === 'function') cargarSolicitudesOfertante();
+    }
+    if (nombre === 'admin')    cargarAdmin();
     if (nombre === 'catalogo')  cargarCatalogo();
     if (nombre === 'usuarios')  cargarUsuarios();
 }
 
-// ── Usuarios (Sprint 1) ───────────────────────────────────────────────────
-// Cambia tu función cargarUsuarios por esta que lee de localStorage o del arreglo DEMO
+// ── Panel de Control de Usuarios (Admin) ──────────────────────────────────
 async function cargarUsuarios() {
     try {
-        // Intentamos leer de localStorage, si no hay nada, inicializamos con los DEMO
-        let usuarios = localStorage.getItem('usuarios_simulados');
-        if (!usuarios) {
-            localStorage.setItem('usuarios_simulados', JSON.stringify(USUARIOS_DEMO));
-            usuarios = JSON.stringify(USUARIOS_DEMO);
-        }
-        const users = JSON.parse(usuarios);
-        
+        const users = obtenerUsuariosLocal();
         const tbody = document.getElementById('usersTableBody');
+        if (!tbody) return;
+
         tbody.innerHTML = users.map(u => `
             <tr>
                 <td>${u.id}</td>
@@ -106,23 +108,29 @@ async function cargarUsuarios() {
     }
 }
 
-// Cambia "async function crearUsuario() {" por:
-window.crearUsuario = async function() {
-    const nombre = document.getElementById('createNombre').value.trim();
-    const email = document.getElementById('createEmail').value.trim();
-    const password = document.getElementById('createPassword').value;
-    const rol = document.getElementById('createRol').value;
+// Ventana de creación interna (Admin o automatizada)
+window.crearUsuario = async function(esRegistroPublico = false) {
+    const sufijo = esRegistroPublico ? 'Reg' : 'create'; 
+    
+    const idNombre   = document.getElementById(`${sufijo}Nombre`)   ? `${sufijo}Nombre`   : 'createNombre';
+    const idEmail    = document.getElementById(`${sufijo}Email`)    ? `${sufijo}Email`    : 'createEmail';
+    const idPassword = document.getElementById(`${sufijo}Password`) ? `${sufijo}Password` : 'createPassword';
+    const idRol      = document.getElementById(`${sufijo}Rol`)      ? `${sufijo}Rol`      : 'createRol';
+
+    const nombre   = document.getElementById(idNombre).value.trim();
+    const email    = document.getElementById(idEmail).value.trim();
+    const password = document.getElementById(idPassword).value;
+    const rol      = document.getElementById(idRol) ? document.getElementById(idRol).value : 'DEMANDANTE';
 
     if (!nombre || !email || !password) {
-        return mostrarMsg('msgUsuario', '❌ Todos los campos son obligatorios', 'err');
+        alert('❌ Todos los campos son obligatorios');
+        return;
     }
 
-    // Lógica simulada de guardado
-    let usuarios = JSON.parse(localStorage.getItem('usuarios_simulados') || JSON.stringify(USUARIOS_DEMO));
-    
-    // Verificar si el correo ya existe
-    if (usuarios.some(u => u.email === email)) {
-        return mostrarMsg('msgUsuario', '❌ El correo ya está registrado', 'err');
+    let usuarios = obtenerUsuariosLocal();
+    if (usuarios.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+        alert('❌ El correo electrónico ya está registrado');
+        return;
     }
 
     const nuevoUsuario = {
@@ -136,15 +144,23 @@ window.crearUsuario = async function() {
     usuarios.push(nuevoUsuario);
     localStorage.setItem('usuarios_simulados', JSON.stringify(usuarios));
 
-    mostrarMsg('msgUsuario', '✅ Usuario creado correctamente (Simulado)', 'ok');
-    ['createNombre', 'createEmail', 'createPassword'].forEach(id => document.getElementById(id).value = '');
-    cargarUsuarios(); 
+    alert('✅ ¡Cuenta creada con éxito! Ya puedes iniciar sesión con tus credenciales.');
+    
+    document.getElementById(idNombre).value = '';
+    document.getElementById(idEmail).value = '';
+    document.getElementById(idPassword).value = '';
+
+    if (esRegistroPublico && typeof mostrarLogin === 'function') {
+        mostrarLogin(); 
+    } else {
+        cargarUsuarios(); 
+    }
 };
 
 window.eliminarUsuario = async function(id) {
     if (!confirm('¿Realmente deseas eliminar este usuario?')) return;
     
-    let usuarios = JSON.parse(localStorage.getItem('usuarios_simulados') || '[]');
+    let usuarios = obtenerUsuariosLocal();
     usuarios = usuarios.filter(u => u.id !== id);
     localStorage.setItem('usuarios_simulados', JSON.stringify(usuarios));
     
@@ -152,56 +168,147 @@ window.eliminarUsuario = async function(id) {
     cargarUsuarios();
 };
 
-// ── Utilidad ──────────────────────────────────────────────────────────────
+// ── Utilidades e Interfaz de Bienvenida ─────────────────────────────────────
 function mostrarMsg(elId, texto, tipo) {
     const el = document.getElementById(elId);
+    if (!el) return;
     el.textContent = texto;
     el.className = 'msg ' + tipo;
     el.style.display = 'block';
     setTimeout(() => el.style.display = 'none', 4000);
 }
-// ✅ PEGA ESTO AL FINAL (Antes de checkAuth();):
 
-// Cambiar visualmente entre Login y Registro
+// Cambiar visualmente entre los formularios de Login y Registro público
 window.conmutarAuth = function(mostrarRegistro) {
-    document.getElementById('loginFormContainer').style.display = mostrarRegistro ? 'none' : 'block';
-    document.getElementById('registroFormContainer').style.display = mostrarRegistro ? 'block' : 'none';
-    document.getElementById('loginError').style.display = 'none';
+    const loginCont = document.getElementById('loginFormContainer');
+    const regCont = document.getElementById('registroFormContainer');
+    
+    if(loginCont) loginCont.style.display = mostrarRegistro ? 'none' : 'block';
+    if(regCont) regCont.style.display = mostrarRegistro ? 'block' : 'none';
+    
+    const errEl = document.getElementById('loginError');
+    if (errEl) errEl.style.display = 'none';
 };
 
-// Escuchar el envío del formulario de registro público
-document.getElementById('registroForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    // Mismo mapeo estricto de tu base de datos: id, nombre, email, password
-    const body = {
-        id: 0,
-        nombre: document.getElementById('regNombre').value.trim(),
-        email: document.getElementById('regEmail').value.trim(),
-        password: document.getElementById('regPassword').value
+// ==========================================================================
+// REGISTRO PÚBLICO INTEGRADO (REEMPLAZA EL FETCH VIEJO)
+// ==========================================================================
+window.registrarUsuarioPublico = function() {
+    const nombreInput   = document.getElementById('nombreReg');
+    const emailInput    = document.getElementById('emailReg');
+    const passwordInput = document.getElementById('passwordReg');
+    const rolInput      = document.getElementById('rolReg'); 
+
+    if (!nombreInput || !emailInput || !passwordInput) {
+        alert("❌ Error: Verifica que los inputs tengan id='nombreReg', 'emailReg' y 'passwordReg'");
+        return;
+    }
+
+    const nombre   = nombreInput.value.trim();
+    const email    = emailInput.value.trim();
+    const password = passwordInput.value;
+    const rol      = rolInput ? rolInput.value : 'DEMANDANTE';
+
+    if (!nombre || !email || !password) {
+        alert('❌ Por favor, llena todos los campos obligatorios.');
+        return;
+    }
+
+    if (password.length < 4) {
+        alert('❌ La contraseña debe tener al menos 4 caracteres.');
+        return;
+    }
+
+    let usuarios = obtenerUsuariosLocal();
+
+    if (usuarios.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+        alert('❌ Este correo electrónico ya se encuentra registrado.');
+        return;
+    }
+
+    const nuevoUsuario = {
+        id: usuarios.length > 0 ? Math.max(...usuarios.map(u => u.id)) + 1 : 1,
+        nombre: nombre,
+        email: email,
+        password: password,
+        rol: rol
     };
 
-    try {
-        const res = await fetch(API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
-        const data = await res.json();
+    usuarios.push(nuevoUsuario);
+    localStorage.setItem('usuarios_simulados', JSON.stringify(usuarios));
 
-        if (res.ok) {
-            mostrarMsg('msgRegistro', '✅ Cuenta creada con éxito. Ya puedes ingresar.', 'ok');
-            document.getElementById('registroForm').reset();
-            
-            // Para el login simulado le asignamos un rol por defecto temporal
-            USUARIOS_DEMO.push({ id: Date.now(), ...body, rol: 'DEMANDANTE' });
-            
-            setTimeout(() => window.conmutarAuth(false), 1500);
-        } else {
-            mostrarMsg('msgRegistro', '❌ ' + (data.mensaje || 'Error al registrar'), 'err');
-        }
-    } catch (e) {
-        mostrarMsg('msgRegistro', '❌ Backend no disponible', 'err');
-    }
-});
+    alert(`✅ ¡Excelente Sebas! Cuenta creada como ${rol}.\nYa puedes iniciar sesión.`);
+
+    nombreInput.value = '';
+    emailInput.value = '';
+    passwordInput.value = '';
+
+    // Te manda de regreso al Login limpio listo para entrar
+    window.conmutarAuth(false);
+};
+
+// Arrancar validación de sesión
 checkAuth();
+// ==========================================================================
+// REGISTRO PÚBLICO INTEGRADO (Sincronizado con tus IDs del HTML)
+// ==========================================================================
+window.registrarUsuarioPublico = function() {
+    // 1. Capturamos los datos usando los IDs reales de tu index.html
+    const nombreInput   = document.getElementById('regNombre');
+    const emailInput    = document.getElementById('regEmail');
+    const passwordInput = document.getElementById('regPassword');
+    const rolInput      = document.getElementById('regRol'); 
+
+    if (!nombreInput || !emailInput || !passwordInput) {
+        alert("❌ Error de diseño: No se encontraron los IDs en el HTML.");
+        return;
+    }
+
+    const nombre   = nombreInput.value.trim();
+    const email    = emailInput.value.trim();
+    const password = passwordInput.value;
+    const rol      = rolInput ? rolInput.value : 'DEMANDANTE';
+
+    // 2. Validaciones básicas obligatorias
+    if (!nombre || !email || !password) {
+        alert('❌ Por favor, llena todos los campos obligatorios.');
+        return;
+    }
+
+    if (password.length < 6) { // Ajustado a 6 como dice tu placeholder
+        alert('❌ La contraseña debe tener al menos 6 caracteres.');
+        return;
+    }
+
+    // 3. Traer los usuarios que ya están en el LocalStorage
+    let usuarios = obtenerUsuariosLocal();
+
+    // 4. Controlar que no se duplique el correo
+    if (usuarios.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+        alert('❌ Este correo electrónico ya se encuentra registrado.');
+        return;
+    }
+
+    // 5. Insertar el nuevo usuario simulado
+    const nuevoId = usuarios.length > 0 ? Math.max(...usuarios.map(u => u.id)) + 1 : 1;
+    const nuevoUsuario = {
+        id: nuevoId,
+        nombre: nombre,
+        email: email,
+        password: password,
+        rol: rol
+    };
+
+    usuarios.push(nuevoUsuario);
+    localStorage.setItem('usuarios_simulados', JSON.stringify(usuarios));
+
+    alert(`✅ ¡Excelente Sebas! Cuenta creada como ${rol}.\nYa puedes iniciar sesión.`);
+
+    // Limpiamos el formulario público
+    nombreInput.value = '';
+    emailInput.value = '';
+    passwordInput.value = '';
+
+    // Te manda de regreso al Login listo para entrar
+    window.conmutarAuth(false);
+};

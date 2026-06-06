@@ -248,14 +248,29 @@ async function cargarCatalogo() {
     filtrarCatalogo();
 }
 
+// REEMPLAZA tu función filtrarCatalogo en productos.js por esta:
 function filtrarCatalogo() {
     const txt = document.getElementById('buscar').value.toLowerCase();
     const cat = document.getElementById('filtroCat').value;
+    const orden = document.getElementById('ordenarCat')?.value || 'recientes'; // Captura el criterio de orden
     
-    const filtrados = catalogoCache.filter(p =>
+    // 1. Filtrar
+    let filtrados = catalogoCache.filter(p =>
         (p.titulo.toLowerCase().includes(txt) || p.descripcion.toLowerCase().includes(txt)) &&
         (!cat || p.categoria === cat)
     );
+    
+    // 2. Ordenar (Simulado con atributos de la semilla o interacción)
+    if (orden === 'recientes') {
+        // Ordenar por ID de mayor a menor (los últimos creados)
+        filtrados.sort((a, b) => b.id - a.id);
+    } else if (orden === 'calificados') {
+        // Asumimos un atributo 'calificacion' (0 a 5) en el objeto
+        filtrados.sort((a, b) => (b.calificacion || 0) - (a.calificacion || 0));
+    } else if (orden === 'utilizados') {
+        // Asumimos un atributo 'vecesUtilizado' para medir popularidad
+        filtrados.sort((a, b) => (b.vecesUtilizado || 0) - (a.vecesUtilizado || 0));
+    }
     
     const cont = document.getElementById('listaCatalogo');
     if (!cont) return;
@@ -264,24 +279,175 @@ function filtrarCatalogo() {
         cont.innerHTML = '<p style="color:var(--muted);font-size:.88rem">No se encontraron productos.</p>';
         return;
     }
+
+    // 3. Renderizar con el botón de "Solicitar" incluido
     cont.innerHTML = filtrados.map(p => `
         <div class="prod-card APROBADO">
             <div class="prod-titulo">${p.titulo}</div>
             <div style="display:flex;gap:.4rem;flex-wrap:wrap">
                 <span class="badge b-info">${p.categoria}</span>
-                ${p.tipo ? `<span class="badge" style="background:#e9d8fd;color:#553c9a">${p.tipo}</span>` : ''}
+                ${p.calificacion ? `<span class="badge" style="background:#fef3c7;color:#92400e">⭐ ${p.calificacion.toFixed(1)}</span>` : ''}
             </div>
             <div class="prod-desc">${p.descripcion}</div>
             <div class="prod-meta">
                 <span class="prod-precio">$${parseFloat(p.precio).toFixed(2)}</span>
                 <span style="font-size:.78rem;color:var(--muted)">👤 ${p.ofertanteNombre || 'Anónimo'}</span>
             </div>
+            <div class="prod-actions" style="margin-top:10px">
+                <button class="btn-success btn-sm" style="width:100%" onclick="abrirModalSolicitud(${p.id}, '${p.titulo.replace(/'/g, "\\'")}')">📩 Solicitar este Producto/Servicio</button>
+            </div>
         </div>`).join('');
 }
-
 // ── Helper: badge de estado ───────────────────────────────────────────────
 function badgeEstado(estado) {
     const m = { PENDIENTE: 'b-pending', APROBADO: 'b-approved', RECHAZADO: 'b-rejected' };
     const i = { PENDIENTE: '⏳', APROBADO: '✅', RECHAZADO: '❌' };
     return `<span class="badge ${m[estado]}">${i[estado]} ${estado}</span>`;
 }
+
+let productoASolicitar = null;
+
+// Abre un modal para que el demandante escriba los requerimientos de su solicitud
+function abrirModalSolicitud(id, titulo) {
+    productoASolicitar = id;
+    // Asumiendo que reutilizas un modal o creas uno para solicitudes
+    const notas = prompt(`Solicitar: "${titulo}"\n\nEscribe los detalles de tu requerimiento (ej. Fecha, cantidad, dirección, etc.):`);
+    
+    if (notas === null) return; // Canceló
+    if (notas.trim().length < 5) {
+        alert("❌ Debes ingresar una descripción detallada de tu necesidad para que el ofertante la evalúe.");
+        return;
+    }
+    
+    registrarSolicitudSimulada(notas.trim());
+}
+
+function registrarSolicitudSimulada(notas) {
+    let solicitudes = JSON.parse(localStorage.getItem('solicitudes_simuladas') || '[]');
+    let productos = obtenerProductosLocal();
+    const prod = productos.find(p => p.id === productoASolicitar);
+
+    if (!prod) return alert("❌ Error: Producto no encontrado.");
+
+    const nuevaSolicitud = {
+        id: solicitudes.length > 0 ? Math.max(...solicitudes.map(s => s.id)) + 1 : 1,
+        productoId: prod.id,
+        productoTitulo: prod.titulo,
+        ofertanteId: prod.ofertanteId, // A quién va dirigida
+        demandanteId: usuarioActual ? usuarioActual.id : 99, // Quién la pide
+        demandanteNombre: usuarioActual ? usuarioActual.nombre : "Cliente Demo",
+        detalles: "%SOLICITUD: " + notas,
+        estado: "PENDIENTE", // Estado de la solicitud: PENDIENTE, ACEPTADA, RECHAZADA
+        fecha: new Date().toLocaleDateString()
+    };
+
+    solicitudes.push(nuevaSolicitud);
+    localStorage.setItem('solicitudes_simuladas', JSON.stringify(solicitudes));
+    
+    alert("✅ ¡Solicitud enviada al ofertante con éxito! Puedes ver su estado en tu panel.");
+    productoASolicitar = null;
+}
+
+// Carga las solicitudes que le han hecho a este Ofertante específico
+async function cargarSolicitudesOfertante() {
+    const cont = document.getElementById('listaSolicitudesRecibidas'); // Asegúrate de tener este contenedor en el HTML de la pestaña Ofertante
+    if (!cont) return;
+
+    const ofId = usuarioActual ? usuarioActual.id : 1;
+    let todasLasSolicitudes = JSON.parse(localStorage.getItem('solicitudes_simuladas') || '[]');
+    
+    // Filtrar solo las solicitudes de productos que le pertenecen a este ofertante
+    let misSolicitudes = todasLasSolicitudes.filter(s => s.ofertanteId === ofId);
+
+    if (misSolicitudes.length === 0) {
+        cont.innerHTML = '<p style="color:var(--muted);font-size:.88rem">No tienes solicitudes pendientes de clientes.</p>';
+        return;
+    }
+
+    cont.innerHTML = misSolicitudes.map(s => `
+        <div class="prod-card ${s.estado}" style="border-left: 4px solid ${s.estado === 'PENDIENTE' ? '#e9b10a' : s.estado === 'ACEPTADA' ? '#10b981' : '#ef4444'}">
+            <div style="display:flex; justify-content:space-between;">
+                <span class="prod-titulo" style="font-size: 1rem;">📦 ${s.productoTitulo}</span>
+                <span class="badge">${s.fecha}</span>
+            </div>
+            <div style="margin: 5px 0; font-size: 0.85rem;">
+                <strong>Cliente:</strong> ${s.demandanteNombre}
+            </div>
+            <div class="prod-desc" style="background: rgba(0,0,0,0.03); padding: 8px; border-radius:4px; font-style: italic;">
+                "${s.detalles.replace("%SOLICITUD: ", "")}"
+            </div>
+            <div style="margin-top: 10px; font-size: 0.8rem;">
+                <strong>Estado de Solicitud:</strong> 
+                <span style="color: ${s.estado === 'PENDIENTE' ? '#d97706' : s.estado === 'ACEPTADA' ? '#059669' : '#dc2626'} font-weight:bold;">
+                    ${s.estado}
+                </span>
+            </div>
+            
+            ${s.estado === 'PENDIENTE' ? `
+                <div class="prod-actions" style="margin-top: 10px; display:flex; gap:10px;">
+                    <button class="btn-success btn-sm" style="flex:1;" onclick="responderSolicitud(${s.id}, 'ACEPTADA')">✅ Aceptar Pedido</button>
+                    <button class="btn-danger btn-sm" style="flex:1;" onclick="responderSolicitud(${s.id}, 'RECHAZADA')">❌ Rechazar Pedido</button>
+                </div>
+            ` : ''}
+        </div>
+    `).join('');
+}
+
+// Carga las solicitudes que le han hecho a este Ofertante específico
+async function cargarSolicitudesOfertante() {
+    const cont = document.getElementById('listaSolicitudesRecibidas'); // Asegúrate de tener este contenedor en el HTML de la pestaña Ofertante
+    if (!cont) return;
+
+    const ofId = usuarioActual ? usuarioActual.id : 1;
+    let todasLasSolicitudes = JSON.parse(localStorage.getItem('solicitudes_simuladas') || '[]');
+    
+    // Filtrar solo las solicitudes de productos que le pertenecen a este ofertante
+    let misSolicitudes = todasLasSolicitudes.filter(s => s.ofertanteId === ofId);
+
+    if (misSolicitudes.length === 0) {
+        cont.innerHTML = '<p style="color:var(--muted);font-size:.88rem">No tienes solicitudes pendientes de clientes.</p>';
+        return;
+    }
+
+    cont.innerHTML = misSolicitudes.map(s => `
+        <div class="prod-card ${s.estado}" style="border-left: 4px solid ${s.estado === 'PENDIENTE' ? '#e9b10a' : s.estado === 'ACEPTADA' ? '#10b981' : '#ef4444'}">
+            <div style="display:flex; justify-content:space-between;">
+                <span class="prod-titulo" style="font-size: 1rem;">📦 ${s.productoTitulo}</span>
+                <span class="badge">${s.fecha}</span>
+            </div>
+            <div style="margin: 5px 0; font-size: 0.85rem;">
+                <strong>Cliente:</strong> ${s.demandanteNombre}
+            </div>
+            <div class="prod-desc" style="background: rgba(0,0,0,0.03); padding: 8px; border-radius:4px; font-style: italic;">
+                "${s.detalles.replace("%SOLICITUD: ", "")}"
+            </div>
+            <div style="margin-top: 10px; font-size: 0.8rem;">
+                <strong>Estado de Solicitud:</strong> 
+                <span style="color: ${s.estado === 'PENDIENTE' ? '#d97706' : s.estado === 'ACEPTADA' ? '#059669' : '#dc2626'} font-weight:bold;">
+                    ${s.estado}
+                </span>
+            </div>
+            
+            ${s.estado === 'PENDIENTE' ? `
+                <div class="prod-actions" style="margin-top: 10px; display:flex; gap:10px;">
+                    <button class="btn-success btn-sm" style="flex:1;" onclick="responderSolicitud(${s.id}, 'ACEPTADA')">✅ Aceptar Pedido</button>
+                    <button class="btn-danger btn-sm" style="flex:1;" onclick="responderSolicitud(${s.id}, 'RECHAZADA')">❌ Rechazar Pedido</button>
+                </div>
+            ` : ''}
+        </div>
+    `).join('');
+}
+
+// Cambia el estado de la solicitud del cliente
+function responderSolicitud(solicitudId, nuevoEstado) {
+    let solicitudes = JSON.parse(localStorage.getItem('solicitudes_simuladas') || '[]');
+    const idx = solicitudes.findIndex(s => s.id === solicitudId);
+
+    if (idx !== -1) {
+        solicitudes[idx].estado = nuevoEstado;
+        localStorage.setItem('solicitudes_simuladas', JSON.stringify(solicitudes));
+        alert(`Solicitud cambiada a: ${nuevoEstado}`);
+        cargarSolicitudesOfertante(); // Recargar la lista
+    }
+}
+

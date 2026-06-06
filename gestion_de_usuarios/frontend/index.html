@@ -19,7 +19,7 @@
             --primary:   #3498db;
             --primary-d: #2980b9;
             --danger:    #e74c3c;
-            --danger-d:  #c0392b;
+            --danger-d:  #c0392b; 
             --success:   #27ae60;
             --warning:   #f39c12;
             --pending-bg:#fff8e1;
@@ -265,7 +265,7 @@
 
             <div id="registroFormContainer" style="display:none">
                 <h2>📝 Crear Cuenta Nueva</h2>
-                <form id="registroForm">
+                <form id="registroForm" onsubmit="event.preventDefault();">
                     <input type="text" id="regNombre" placeholder="Nombre Completo" required style="margin-bottom:.8rem">
                     <input type="email" id="regEmail" placeholder="Correo Electrónico" required style="margin-bottom:.8rem">
                     <input type="password" id="regPassword" placeholder="Contraseña (Mín. 6 chars)" required style="margin-bottom:.8rem">
@@ -273,7 +273,7 @@
                         <option value="OFERTANTE">💼 Ofertante (Vender)</option>
                         <option value="DEMANDANTE">🔍 Demandante (Buscar)</option>
                     </select>
-                    <button type="submit" class="btn-success" style="width:100%">Registrarme</button>
+                    <button type="button" class="btn-success" style="width:100%" onclick="registrarUsuarioPublico()">Registrarme</button>
                 </form>
                 <p style="margin-top: 1rem; text-align: center; font-size: .85rem;">
                     ¿Ya tienes cuenta? <a href="#" onclick="conmutarAuth(false)">Inicia sesión</a>
@@ -406,8 +406,17 @@
                     <p style="color:var(--muted);font-size:.88rem">Cargando...</p>
                 </div>
             </div>
-        </div>
 
+            <hr style="margin: 20px 0; border: 0; border-top: 1px solid #e2e8f0;">
+
+            <div class="card">
+                <h2>📥 Solicitudes de Clientes Recibidas</h2>
+                <div id="listaSolicitudesRecibidas">
+                    <p style="color:var(--muted);font-size:.88rem">Cargando solicitudes...</p>
+                </div>
+            </div>
+
+        </div> 
         <!-- ─────────────────────────────────────────── -->
         <!-- TAB: ADMIN (HU-03)                          -->
         <!-- ─────────────────────────────────────────── -->
@@ -437,12 +446,20 @@
         <div id="tab-catalogo" class="tab-content">
             <div style="display:flex;gap:.8rem;margin-bottom:1rem;flex-wrap:wrap">
                 <input type="text" id="buscar" placeholder="🔍 Buscar..." oninput="filtrarCatalogo()" style="flex:1;min-width:180px">
+                
                 <select id="filtroCat" onchange="filtrarCatalogo()" style="width:180px">
                     <option value="">Todas las categorías</option>
                     <option>Tecnología</option><option>Hogar</option><option>Servicios</option>
                     <option>Educación</option><option>Salud</option><option>Moda</option><option>Otros</option>
                 </select>
+
+                <select id="ordenarCat" onchange="filtrarCatalogo()" style="width:180px; padding: 8px; border-radius: 4px;">
+                    <option value="recientes">⏱️ Más recientes</option>
+                    <option value="calificados">⭐ Mejor calificados</option>
+                    <option value="utilizados">🔥 Más utilizados</option>
+                </select>
             </div>
+
             <div class="productos-grid" id="listaCatalogo">
                 <p style="color:var(--muted);font-size:.88rem">Cargando catálogo...</p>
             </div>
