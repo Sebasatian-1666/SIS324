@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plataforma – Sprint 2</title>
+    <title>Plataforma</title>
     <style>
         /* ── Base (mantiene tu estilo original) ── */
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
@@ -477,6 +477,26 @@
         <div class="modal-actions">
             <button class="btn-danger" onclick="confirmarRechazo()">Confirmar Rechazo</button>
             <button class="btn-muted"  onclick="cerrarModal()">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Calificación -->
+<div id="overlayCalificacion" class="overlay">
+    <div class="modal">
+        <h3>⭐ Calificar Producto/Servicio</h3>
+        <p id="calProductoTitulo" style="font-size:.9rem;color:var(--muted);margin-bottom:.8rem"></p>
+        <label style="font-size:.85rem;font-weight:600">Puntuación (1–10)</label>
+        <input type="number" id="calPuntuacion" min="1" max="10" value="10"
+               style="width:80px;margin:.4rem 0 .8rem;padding:.4rem">
+        <label style="font-size:.85rem;font-weight:600">Comentario</label>
+        <textarea id="calComentario" rows="3" placeholder="Comparte tu experiencia con este producto o servicio..."
+                  oninput="contarPalabrasCalificacion()"
+                  style="margin:.4rem 0 .3rem"></textarea>
+        <div id="calWordCount" style="font-size:.78rem;color:var(--muted);margin-bottom:.8rem">0 / 100 palabras</div>
+        <div class="modal-actions">
+            <button class="btn-success" onclick="enviarCalificacion()">Enviar Calificación</button>
+            <button class="btn-muted"   onclick="cerrarModalCalificacion()">Cancelar</button>
         </div>
     </div>
 </div>

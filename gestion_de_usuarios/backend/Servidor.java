@@ -13,296 +13,305 @@ import java.util.Map;
 
 public class Servidor {
 
-    private static final ProductoDAO prodDAO = new ProductoDAO();
-    private static final UsuarioDAO userDAO = new UsuarioDAO();
-    private static final SolicitudDAO solDAO = new SolicitudDAO(); // Novedad Sprint 3
-    private static final ObjectMapper mapper = new ObjectMapper();
+    private static final ProductoDAO      prodDAO  = new ProductoDAO();
+    private static final UsuarioDAO       userDAO  = new UsuarioDAO();
+    private static final SolicitudDAO     solDAO   = new SolicitudDAO();
+    private static final CalificacionDAO  calDAO   = new CalificacionDAO();
+    private static final ObjectMapper     mapper   = new ObjectMapper();
 
     public static void main(String[] args) throws IOException {
-        System.out.println("🔄 Iniciando componentes del servidor...");
+        System.out.println("Iniciando componentes del servidor...");
 
-        try {
-            System.out.println("⏳ Inicializando tablas en la base de datos...");
-            prodDAO.crearTabla();
-            userDAO.crearTabla();
-            solDAO.crearTabla(); // Novedad Sprint 3
-            System.out.println("✅ Tablas verificadas/creadas con éxito.");
-        } catch (Exception e) {
-            System.out.println("🚨 ERROR AL INICIALIZAR LA BASE DE DATOS:");
-            e.printStackTrace();
-            System.out.println("⚠️ El servidor intentará continuar levantándose de todos modos...");
-        }
+        prodDAO.crearTabla();
+        userDAO.crearTabla();
+        solDAO.crearTabla();
+        calDAO.crearTabla();
+        sembrarAdminSiNoExiste();
 
         String portEnv = System.getenv("PORT");
         int puerto = (portEnv != null) ? Integer.parseInt(portEnv) : 8080;
 
         HttpServer server = HttpServer.create(new InetSocketAddress(puerto), 0);
-        
-        server.createContext("/", new RootHandler());
-        server.createContext("/api/productos", new ProductosHandler());
-        server.createContext("/api/usuarios", new UsuariosHandler());
-        server.createContext("/api/solicitudes", new SolicitudesHandler()); // Novedad Sprint 3
+        server.createContext("/",                    new StaticHandler());
+        server.createContext("/api/productos",       new ProductosHandler());
+        server.createContext("/api/usuarios",        new UsuariosHandler());
+        server.createContext("/api/usuarios/login",  new LoginHandler());
+        server.createContext("/api/solicitudes",     new SolicitudesHandler());
+        server.createContext("/api/calificaciones",  new CalificacionesHandler());
 
         server.setExecutor(null);
-        System.out.println("🚀 Servidor HTTP corriendo en el puerto: " + puerto);
+        System.out.println("Servidor HTTP corriendo en el puerto: " + puerto);
         server.start();
     }
 
-    // ─── PÁGINA PRINCIPAL (MENÚ) ───
-    static class RootHandler implements HttpHandler {
-        @Override
-        public void handle(HttpExchange exchange) throws IOException {
-            configurarCORS(exchange);
-            String metodo = exchange.getRequestMethod();
-
-            if ("OPTIONS".equalsIgnoreCase(metodo)) {
-                exchange.sendResponseHeaders(204, -1);
-                return;
-            }
-
-            String html = "<!DOCTYPE html>" +
-                          "<html lang='es'>" +
-                          "<head>" +
-                          "<meta charset='UTF-8'>" +
-                          "<title>Menú Principal - Sprint 3</title>" +
-                          "<style>" +
-                          "body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; background-color: #f4f4f4; }" +
-                          "h1 { color: #333; }" +
-                          "a { display: inline-block; margin: 10px; padding: 15px 30px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; }" +
-                          "a:hover { background-color: #0056b3; }" +
-                          "</style>" +
-                          "</head>" +
-                          "<body>" +
-                          "<h1>Bienvenido a la Aplicación (Sprint 3)</h1>" +
-                          "<p>Selecciona una opción para continuar:</p>" +
-                          "<a href='/api/productos'>Ver Productos</a>" +
-                          "<a href='/api/usuarios'>Ver Usuarios</a>" +
-                          "<a href='/api/solicitudes'>Ver Solicitudes</a>" +
-                          "</body>" +
-                          "</html>";
-            
-            enviarRespuestaHTML(exchange, 200, html);
+    // ── Siembra el admin por defecto si no hay ningún ADMINISTRADOR ─────
+    private static void sembrarAdminSiNoExiste() {
+        List<Usuario> todos = userDAO.listar();
+        boolean tieneAdmin = todos.stream()
+            .anyMatch(u -> "ADMINISTRADOR".equals(u.getRol()));
+        if (!tieneAdmin) {
+            Usuario admin = new Usuario("Administrador", "admin@test.com", "admin123", "ADMINISTRADOR");
+            userDAO.registrar(admin);
+            System.out.println("Admin semilla creado: admin@test.com / admin123");
         }
     }
 
-    // ─── HANDLER PRODUCTOS (Modificado para Funcionalidad 1) ───
+    // ── Archivos estáticos (frontend/) ───────────────────────────────────
+    static class StaticHandler implements HttpHandler {
+        private static final File FRONTEND = new File("frontend");
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            configurarCORS(ex);
+            if ("OPTIONS".equalsIgnoreCase(ex.getRequestMethod())) { ex.sendResponseHeaders(204,-1); return; }
+
+            String path = ex.getRequestURI().getPath();
+            if (path.equals("/") || path.isEmpty()) path = "/index.html";
+
+            File archivo = new File(FRONTEND, path);
+            if (!archivo.getCanonicalPath().startsWith(FRONTEND.getCanonicalPath())) {
+                ex.sendResponseHeaders(403, -1); return;
+            }
+            if (!archivo.exists() || !archivo.isFile()) {
+                byte[] b = "404".getBytes(StandardCharsets.UTF_8);
+                ex.sendResponseHeaders(404, b.length); ex.getResponseBody().write(b); ex.getResponseBody().close(); return;
+            }
+            String ct = "application/octet-stream";
+            if (archivo.getName().endsWith(".html")) ct = "text/html; charset=UTF-8";
+            else if (archivo.getName().endsWith(".js")) ct = "application/javascript; charset=UTF-8";
+            else if (archivo.getName().endsWith(".css")) ct = "text/css; charset=UTF-8";
+            byte[] bytes = java.nio.file.Files.readAllBytes(archivo.toPath());
+            ex.getResponseHeaders().set("Content-Type", ct);
+            ex.sendResponseHeaders(200, bytes.length);
+            try (OutputStream os = ex.getResponseBody()) { os.write(bytes); }
+        }
+    }
+
+    // ── Productos ────────────────────────────────────────────────────────
     static class ProductosHandler implements HttpHandler {
         @Override
-        public void handle(HttpExchange exchange) throws IOException {
-            configurarCORS(exchange);
-            String metodo = exchange.getRequestMethod();
-            String query = exchange.getRequestURI().getQuery();
-
-            if ("OPTIONS".equalsIgnoreCase(metodo)) {
-                exchange.sendResponseHeaders(204, -1);
-                return;
-            }
-
+        public void handle(HttpExchange ex) throws IOException {
+            configurarCORS(ex);
+            String metodo = ex.getRequestMethod();
+            String query  = ex.getRequestURI().getQuery();
+            if ("OPTIONS".equalsIgnoreCase(metodo)) { ex.sendResponseHeaders(204,-1); return; }
             try {
                 if ("GET".equalsIgnoreCase(metodo)) {
                     List<Producto> lista;
-                    
                     if (query != null && query.contains("estado=PENDIENTE")) {
                         lista = prodDAO.listarPendientes();
                     } else if (query != null && query.contains("ofertanteId=")) {
                         int id = Integer.parseInt(query.split("ofertanteId=")[1].split("&")[0]);
                         lista = prodDAO.listarPorOfertante(id);
-                    } else if (query != null && query.contains("orden=")) { 
-                        // F1: Búsqueda con filtros dinámicos (?orden=recientes, ?orden=utilizados, ?orden=calificados)
+                    } else if (query != null && query.contains("orden=")) {
                         String orden = query.split("orden=")[1].split("&")[0];
                         lista = prodDAO.listarAprobadosConFiltro(orden);
                     } else if (query != null && query.contains("id=")) {
                         int id = Integer.parseInt(query.split("id=")[1].split("&")[0]);
                         Producto p = prodDAO.buscarPorId(id);
-                        if (p == null) {
-                            enviarTextoPlano(exchange, 200, "No hay productos registrados con ese ID");
-                            return;
-                        }
-                        enviarRespuesta(exchange, 200, mapper.writeValueAsString(p));
-                        return;
+                        if (p == null) { enviarTexto(ex, 200, "No hay productos con ese ID"); return; }
+                        enviarJSON(ex, 200, mapper.writeValueAsString(p)); return;
                     } else {
-                        // Por defecto devuelve los aprobados ordenados por los más recientes
                         lista = prodDAO.listarAprobadosConFiltro("recientes");
                     }
-
-                    if (lista == null || lista.isEmpty()) {
-                        enviarTextoPlano(exchange, 200, "No hay productos registrados");
-                    } else {
-                        enviarRespuesta(exchange, 200, mapper.writeValueAsString(lista));
-                    }
+                    if (lista == null || lista.isEmpty()) enviarTexto(ex, 200, "No hay productos registrados");
+                    else enviarJSON(ex, 200, mapper.writeValueAsString(lista));
 
                 } else if ("POST".equalsIgnoreCase(metodo)) {
-                    Producto p = mapper.readValue(exchange.getRequestBody(), Producto.class);
+                    Producto p = mapper.readValue(ex.getRequestBody(), Producto.class);
                     p.setEstado("PENDIENTE");
-                    boolean ok = prodDAO.registrar(p);
-                    enviarRespuesta(exchange, ok ? 201 : 400, "{\"success\":" + ok + "}");
-                } else if ("PUT".equalsIgnoreCase(metodo)) {
-                    Producto p = mapper.readValue(exchange.getRequestBody(), Producto.class);
-                    if (p.getId() <= 0) {
-                        enviarRespuesta(exchange, 400, "{\"error\":\"El ID del producto es obligatorio para actualizar\"}");
-                        return;
+                    if (p.getOfertanteId() <= 0) {
+                        enviarJSON(ex, 400, "{\"error\":\"ofertanteId inválido\"}"); return;
                     }
+                    boolean ok = prodDAO.registrar(p);
+                    enviarJSON(ex, ok ? 201 : 400, "{\"success\":" + ok + "}");
+
+                } else if ("PUT".equalsIgnoreCase(metodo)) {
+                    Producto p = mapper.readValue(ex.getRequestBody(), Producto.class);
+                    if (p.getId() <= 0) { enviarJSON(ex, 400, "{\"error\":\"ID obligatorio\"}"); return; }
                     boolean ok = prodDAO.actualizar(p);
-                    enviarRespuesta(exchange, ok ? 200 : 400, "{\"success\":" + ok + "}");
+                    enviarJSON(ex, ok ? 200 : 400, "{\"success\":" + ok + "}");
+
                 } else if ("DELETE".equalsIgnoreCase(metodo)) {
                     if (query != null && query.contains("id=")) {
                         int id = Integer.parseInt(query.split("id=")[1].split("&")[0]);
                         boolean ok = prodDAO.eliminar(id);
-                        enviarRespuesta(exchange, ok ? 200 : 400, "{\"success\":" + ok + "}");
-                    } else {
-                        enviarRespuesta(exchange, 400, "{\"error\":\"Falta ID\"}");
-                    }
-                } else if ("PATCH".equalsIgnoreCase(metodo)) { 
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> body = mapper.readValue(exchange.getRequestBody(), Map.class);
-                    int id = (Integer) body.get("id");
-                    String decision = (String) body.get("decision");
-                    String motivo = (String) body.get("motivoRechazo");
-                    if ("RECHAZADO".equals(decision) && (motivo == null || motivo.trim().isEmpty())) {
-                        enviarRespuesta(exchange, 400, "{\"error\":\"El motivo de rechazo es obligatorio\"}");
-                        return;
-                    }
-                    boolean ok = prodDAO.validar(id, decision, motivo);
-                    enviarRespuesta(exchange, ok ? 200 : 400, "{\"success\":" + ok + "}");
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-                enviarRespuesta(exchange, 500, "{\"error\":\"" + e.getMessage() + "\"}");
-            }
-        }
-    }
-
-    // ─── HANDLER SOLICITUDES (Novedad Sprint 3 - Funcionalidades 2 y 3) ───
-    static class SolicitudesHandler implements HttpHandler {
-        @Override
-        public void handle(HttpExchange exchange) throws IOException {
-            configurarCORS(exchange);
-            String metodo = exchange.getRequestMethod();
-            String query = exchange.getRequestURI().getQuery();
-
-            if ("OPTIONS".equalsIgnoreCase(metodo)) {
-                exchange.sendResponseHeaders(204, -1);
-                return;
-            }
-
-            try {
-                if ("POST".equalsIgnoreCase(metodo)) {
-                    // Funcionalidad 2: Solicitar un Producto/Servicio (Demandante)
-                    Solicitud s = mapper.readValue(exchange.getRequestBody(), Solicitud.class);
-                    s.setEstado("PENDIENTE"); // Toda solicitud empieza pendiente de evaluación
-                    boolean ok = solDAO.registrar(s);
-                    enviarRespuesta(exchange, ok ? 201 : 400, "{\"success\":" + ok + "}");
-
-                } else if ("GET".equalsIgnoreCase(metodo)) {
-                    // Funcionalidad 3: Visualizar solicitudes recibidas por el Ofertante
-                    if (query != null && query.contains("ofertanteId=")) {
-                        int ofertanteId = Integer.parseInt(query.split("ofertanteId=")[1].split("&")[0]);
-                        List<Solicitud> lista = solDAO.listarPorOfertante(ofertanteId);
-                        
-                        if (lista == null || lista.isEmpty()) {
-                            enviarTextoPlano(exchange, 200, "No hay solicitudes para tus ofertas");
-                        } else {
-                            enviarRespuesta(exchange, 200, mapper.writeValueAsString(lista));
-                        }
-                    } else {
-                        enviarRespuesta(exchange, 400, "{\"error\":\"El parámetro ofertanteId es requerido\"}");
-                    }
+                        enviarJSON(ex, ok ? 200 : 400, "{\"success\":" + ok + "}");
+                    } else enviarJSON(ex, 400, "{\"error\":\"Falta ID\"}");
 
                 } else if ("PATCH".equalsIgnoreCase(metodo)) {
-                    // Funcionalidad 3: Ofertante acepta o rechaza el pedido
                     @SuppressWarnings("unchecked")
-                    Map<String, Object> body = mapper.readValue(exchange.getRequestBody(), Map.class);
+                    Map<String,Object> body = mapper.readValue(ex.getRequestBody(), Map.class);
                     int id = (Integer) body.get("id");
-                    String nuevoEstado = (String) body.get("estado"); // "ACEPTADA" o "RECHAZADA"
-
-                    if (!"ACEPTADA".equals(nuevoEstado) && !"RECHAZADA".equals(nuevoEstado)) {
-                        enviarRespuesta(exchange, 400, "{\"error\":\"Estado no válido. Use ACEPTADA o RECHAZADA\"}");
-                        return;
+                    String decision = (String) body.get("decision");
+                    String motivo   = (String) body.get("motivoRechazo");
+                    if ("RECHAZADO".equals(decision) && (motivo == null || motivo.trim().isEmpty())) {
+                        enviarJSON(ex, 400, "{\"error\":\"El motivo de rechazo es obligatorio\"}"); return;
                     }
-
-                    boolean ok = solDAO.responder(id, nuevoEstado);
-                    enviarRespuesta(exchange, ok ? 200 : 400, "{\"success\":" + ok + "}");
-                } else {
-                    enviarRespuesta(exchange, 405, "{\"error\":\"Método no soportado\"}");
+                    boolean ok = prodDAO.validar(id, decision, motivo);
+                    enviarJSON(ex, ok ? 200 : 400, "{\"success\":" + ok + "}");
                 }
             } catch (Exception e) {
                 e.printStackTrace();
-                enviarRespuesta(exchange, 500, "{\"error\":\"" + e.getMessage() + "\"}");
+                enviarJSON(ex, 500, "{\"error\":\"" + e.getMessage() + "\"}");
             }
         }
     }
 
-    // ─── HANDLER USUARIOS ───
+    // ── Solicitudes ──────────────────────────────────────────────────────
+    static class SolicitudesHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            configurarCORS(ex);
+            String metodo = ex.getRequestMethod();
+            String query  = ex.getRequestURI().getQuery();
+            if ("OPTIONS".equalsIgnoreCase(metodo)) { ex.sendResponseHeaders(204,-1); return; }
+            try {
+                if ("POST".equalsIgnoreCase(metodo)) {
+                    Solicitud s = mapper.readValue(ex.getRequestBody(), Solicitud.class);
+                    s.setEstado("PENDIENTE");
+                    boolean ok = solDAO.registrar(s);
+                    enviarJSON(ex, ok ? 201 : 400, "{\"success\":" + ok + "}");
+
+                } else if ("GET".equalsIgnoreCase(metodo)) {
+                    if (query != null && query.contains("ofertanteId=")) {
+                        int id = Integer.parseInt(query.split("ofertanteId=")[1].split("&")[0]);
+                        List<Solicitud> lista = solDAO.listarPorOfertante(id);
+                        if (lista == null || lista.isEmpty()) enviarTexto(ex, 200, "No hay solicitudes");
+                        else enviarJSON(ex, 200, mapper.writeValueAsString(lista));
+                    } else enviarJSON(ex, 400, "{\"error\":\"Falta ofertanteId\"}");
+
+                } else if ("PATCH".equalsIgnoreCase(metodo)) {
+                    @SuppressWarnings("unchecked")
+                    Map<String,Object> body = mapper.readValue(ex.getRequestBody(), Map.class);
+                    int id = (Integer) body.get("id");
+                    String estado = (String) body.get("estado");
+                    if (!"ACEPTADA".equals(estado) && !"RECHAZADA".equals(estado)) {
+                        enviarJSON(ex, 400, "{\"error\":\"Estado no válido\"}"); return;
+                    }
+                    boolean ok = solDAO.responder(id, estado);
+                    enviarJSON(ex, ok ? 200 : 400, "{\"success\":" + ok + "}");
+                } else enviarJSON(ex, 405, "{\"error\":\"Método no soportado\"}");
+            } catch (Exception e) {
+                e.printStackTrace();
+                enviarJSON(ex, 500, "{\"error\":\"" + e.getMessage() + "\"}");
+            }
+        }
+    }
+
+    // ── Usuarios ─────────────────────────────────────────────────────────
     static class UsuariosHandler implements HttpHandler {
         @Override
-        public void handle(HttpExchange exchange) throws IOException {
-            configurarCORS(exchange);
-            String metodo = exchange.getRequestMethod();
-
-            if ("OPTIONS".equalsIgnoreCase(metodo)) {
-                exchange.sendResponseHeaders(204, -1);
-                return;
-            }
-
+        public void handle(HttpExchange ex) throws IOException {
+            configurarCORS(ex);
+            String metodo = ex.getRequestMethod();
+            if ("OPTIONS".equalsIgnoreCase(metodo)) { ex.sendResponseHeaders(204,-1); return; }
             try {
                 if ("GET".equalsIgnoreCase(metodo)) {
                     List<Usuario> lista = userDAO.listar();
-                    if (lista == null || lista.isEmpty()) {
-                        enviarTextoPlano(exchange, 200, "No hay usuarios registrados");
-                    } else {
-                        enviarRespuesta(exchange, 200, mapper.writeValueAsString(lista));
-                    }
+                    if (lista == null || lista.isEmpty()) enviarTexto(ex, 200, "No hay usuarios");
+                    else enviarJSON(ex, 200, mapper.writeValueAsString(lista));
+
                 } else if ("POST".equalsIgnoreCase(metodo)) {
-                    Usuario u = mapper.readValue(exchange.getRequestBody(), Usuario.class);
+                    Usuario u = mapper.readValue(ex.getRequestBody(), Usuario.class);
+                    if (u.getRol() == null || u.getRol().isEmpty()) u.setRol("DEMANDANTE");
                     boolean ok = userDAO.registrar(u);
-                    enviarRespuesta(exchange, ok ? 201 : 400, "{\"success\":" + ok + "}");
+                    enviarJSON(ex, ok ? 201 : 400, "{\"success\":" + ok + "}");
+
                 } else if ("DELETE".equalsIgnoreCase(metodo)) {
-                    String query = exchange.getRequestURI().getQuery();
+                    String query = ex.getRequestURI().getQuery();
                     if (query != null && query.contains("id=")) {
                         int id = Integer.parseInt(query.split("id=")[1].split("&")[0]);
                         boolean ok = userDAO.eliminar(id);
-                        enviarRespuesta(exchange, ok ? 200 : 400, "{\"mensaje\":\"" + (ok ? "Usuario eliminado correctamente" : "No se pudo eliminar") + "\"}");
-                    } else {
-                        enviarRespuesta(exchange, 400, "{\"mensaje\":\"Falta ID\"}");
-                    }
+                        enviarJSON(ex, ok ? 200 : 400, "{\"mensaje\":\"" + (ok ? "Eliminado" : "Error") + "\"}");
+                    } else enviarJSON(ex, 400, "{\"error\":\"Falta ID\"}");
                 }
             } catch (Exception e) {
-                enviarRespuesta(exchange, 500, "{\"error\":\"" + e.getMessage() + "\"}");
+                enviarJSON(ex, 500, "{\"error\":\"" + e.getMessage() + "\"}");
             }
         }
     }
 
-    // ─── HELPERS DE RESPUESTA ───
-    private static void configurarCORS(HttpExchange exchange) {
-        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-        exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
-        exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    }
-
-    private static void enviarRespuesta(HttpExchange exchange, int codigo, String json) throws IOException {
-        byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
-        exchange.sendResponseHeaders(codigo, bytes.length);
-        try (OutputStream os = exchange.getResponseBody()) {
-            os.write(bytes);
+    // ── Login ─────────────────────────────────────────────────────────────
+    static class LoginHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            configurarCORS(ex);
+            if ("OPTIONS".equalsIgnoreCase(ex.getRequestMethod())) { ex.sendResponseHeaders(204,-1); return; }
+            if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) { enviarJSON(ex, 405, "{\"error\":\"Método no soportado\"}"); return; }
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String,String> body = mapper.readValue(ex.getRequestBody(), Map.class);
+                Usuario u = userDAO.login(body.get("email"), body.get("password"));
+                if (u != null) enviarJSON(ex, 200, mapper.writeValueAsString(u));
+                else           enviarJSON(ex, 401, "{\"error\":\"Credenciales incorrectas\"}");
+            } catch (Exception e) {
+                enviarJSON(ex, 500, "{\"error\":\"" + e.getMessage() + "\"}");
+            }
         }
     }
 
-    private static void enviarRespuestaHTML(HttpExchange exchange, int codigo, String html) throws IOException {
-        byte[] bytes = html.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8");
-        exchange.sendResponseHeaders(codigo, bytes.length);
-        try (OutputStream os = exchange.getResponseBody()) {
-            os.write(bytes);
+    // ── Calificaciones ────────────────────────────────────────────────────
+    static class CalificacionesHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            configurarCORS(ex);
+            String metodo = ex.getRequestMethod();
+            String query  = ex.getRequestURI().getQuery();
+            if ("OPTIONS".equalsIgnoreCase(metodo)) { ex.sendResponseHeaders(204,-1); return; }
+            try {
+                if ("GET".equalsIgnoreCase(metodo)) {
+                    if (query != null && query.contains("productoId=")) {
+                        int pid = Integer.parseInt(query.split("productoId=")[1].split("&")[0]);
+                        List<Calificacion> lista = calDAO.listarPorProducto(pid);
+                        enviarJSON(ex, 200, mapper.writeValueAsString(lista));
+                    } else enviarJSON(ex, 400, "{\"error\":\"Falta productoId\"}");
+
+                } else if ("POST".equalsIgnoreCase(metodo)) {
+                    @SuppressWarnings("unchecked")
+                    Map<String,Object> body = mapper.readValue(ex.getRequestBody(), Map.class);
+                    int productoId   = (Integer) body.get("productoId");
+                    int usuarioId    = (Integer) body.get("usuarioId");
+                    String nombre    = (String)  body.get("usuarioNombre");
+                    int puntuacion   = (Integer) body.get("puntuacion");
+                    String comentario= (String)  body.get("comentario");
+
+                    if (puntuacion < 1 || puntuacion > 10) {
+                        enviarJSON(ex, 400, "{\"error\":\"La puntuación debe ser entre 1 y 10\"}"); return;
+                    }
+                    // Limitar comentario a ~100 palabras
+                    String[] palabras = comentario.trim().split("\\s+");
+                    if (palabras.length > 100) {
+                        enviarJSON(ex, 400, "{\"error\":\"El comentario no puede superar las 100 palabras\"}"); return;
+                    }
+
+                    String fecha = java.time.LocalDate.now().toString();
+                    Calificacion c = new Calificacion(productoId, usuarioId, nombre, puntuacion, comentario, fecha);
+                    boolean ok = calDAO.registrar(c);
+                    enviarJSON(ex, ok ? 201 : 400, "{\"success\":" + ok + "}");
+                } else enviarJSON(ex, 405, "{\"error\":\"Método no soportado\"}");
+            } catch (Exception e) {
+                e.printStackTrace();
+                enviarJSON(ex, 500, "{\"error\":\"" + e.getMessage() + "\"}");
+            }
         }
     }
 
-    private static void enviarTextoPlano(HttpExchange exchange, int codigo, String texto) throws IOException {
-        byte[] bytes = texto.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=UTF-8");
-        exchange.sendResponseHeaders(codigo, bytes.length);
-        try (OutputStream os = exchange.getResponseBody()) {
-            os.write(bytes);
-        }
+    // ── Helpers ───────────────────────────────────────────────────────────
+    private static void configurarCORS(HttpExchange ex) {
+        ex.getResponseHeaders().set("Access-Control-Allow-Origin",  "*");
+        ex.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+        ex.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+    }
+    private static void enviarJSON(HttpExchange ex, int code, String json) throws IOException {
+        byte[] b = json.getBytes(StandardCharsets.UTF_8);
+        ex.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
+        ex.sendResponseHeaders(code, b.length);
+        try (OutputStream os = ex.getResponseBody()) { os.write(b); }
+    }
+    private static void enviarTexto(HttpExchange ex, int code, String txt) throws IOException {
+        byte[] b = txt.getBytes(StandardCharsets.UTF_8);
+        ex.getResponseHeaders().set("Content-Type", "text/plain; charset=UTF-8");
+        ex.sendResponseHeaders(code, b.length);
+        try (OutputStream os = ex.getResponseBody()) { os.write(b); }
     }
 }

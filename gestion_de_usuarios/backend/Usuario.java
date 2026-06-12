@@ -2,24 +2,27 @@ package backend;
 
 public class Usuario {
     
-    private int id; // Cambiado de Long a int para sincronizar con JDBC y SQLite
+    private int id;
     private String nombre;
     private String email;
     private String password;
+    private String rol; // ADMINISTRADOR | OFERTANTE | DEMANDANTE
 
     public Usuario() {}
 
-    public Usuario(int id, String nombre, String email, String password) {
+    public Usuario(int id, String nombre, String email, String password, String rol) {
         this.id = id;
         this.nombre = nombre;
         this.email = email;
         this.password = password;
+        this.rol = rol;
     }
 
-    public Usuario(String nombre, String email, String password) {
+    public Usuario(String nombre, String email, String password, String rol) {
         this.nombre = nombre;
         this.email = email;
         this.password = password;
+        this.rol = rol;
     }
 
     // Getters and Setters
@@ -34,4 +37,7 @@ public class Usuario {
     
     public String getPassword() { return password; }
     public void setPassword(String password) { this.password = password; }
+
+    public String getRol() { return rol; }
+    public void setRol(String rol) { this.rol = rol; }
 }

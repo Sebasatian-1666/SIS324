@@ -1,31 +1,9 @@
-// ── productos.js – Sprint 2 (HU-01, HU-02, HU-03) ──────────────────────
-// Mantiene intacta la estructura original pero con persistencia simulada en localStorage
-
+// ── productos.js – conectado al backend real ──────────────────────────────
 let catalogoCache = [];
 let productoARechazar = null;
 
-// 🧪 Semilla inicial para que la app no aparezca vacía la primera vez
-const PRODUCTOS_SEMILLA = [
-    { id: 1, titulo: "Laptop HP Pavillion", descripcion: "Excelente estado, 16GB de RAM y 512GB SSD.", precio: 650.00, categoria: "Tecnología", tipo: "PRODUCTO", estado: "PENDIENTE", ofertanteId: 1, ofertanteNombre: "Juan Ofertante" },
-    { id: 2, titulo: "Clases de Cálculo I", descripcion: "Clases particulares orientadas a exámenes de la USFX.", precio: 20.00, categoria: "Servicios", tipo: "SERVICIO", estado: "APROBADO", ofertanteId: 1, ofertanteNombre: "Juan Ofertante" }
-];
-
-// 🔄 Helper para sincronizar la base de datos local simulada
-function obtenerProductosLocal() {
-    let prods = localStorage.getItem('productos_simulados');
-    if (!prods) {
-        localStorage.setItem('productos_simulados', JSON.stringify(PRODUCTOS_SEMILLA));
-        prods = JSON.stringify(PRODUCTOS_SEMILLA);
-    }
-    return JSON.parse(prods);
-}
-
-function guardarProductosLocal(arr) {
-    localStorage.setItem('productos_simulados', JSON.stringify(arr));
-}
-
 // ══════════════════════════════════════════════════════════════════════════
-// HU-01 + HU-02: Guardar producto (crear o editar) - MODO FRONTEND
+// HU-01 + HU-02: Guardar producto (crear o editar)
 // ══════════════════════════════════════════════════════════════════════════
 async function guardarProducto() {
     const editId = document.getElementById('prodEditId').value;
@@ -35,70 +13,70 @@ async function guardarProducto() {
         precio:      parseFloat(document.getElementById('prodPrecio').value),
         categoria:   document.getElementById('prodCategoria').value,
         tipo:        document.getElementById('prodTipo').value,
-        ofertanteId: usuarioActual ? usuarioActual.id : 1,
-        ofertanteNombre: usuarioActual ? usuarioActual.nombre : "Juan Ofertante"
+        ofertanteId: usuarioActual ? usuarioActual.id : 0,
+        ofertanteNombre: usuarioActual ? usuarioActual.nombre : ''
     };
 
-    // Validaciones básicas intactas
-    if (!body.titulo || body.titulo.length < 3) {
+    if (!body.titulo || body.titulo.length < 3)
         return mostrarMsg('msgProducto', '❌ El título debe tener al menos 3 caracteres', 'err');
-    }
-    if (!body.descripcion || body.descripcion.length < 10) {
+    if (!body.descripcion || body.descripcion.length < 10)
         return mostrarMsg('msgProducto', '❌ La descripción debe tener al menos 10 caracteres', 'err');
-    }
-    if (!body.precio || body.precio <= 0) {
+    if (!body.precio || body.precio <= 0)
         return mostrarMsg('msgProducto', '❌ El precio debe ser mayor a 0', 'err');
-    }
-    if (!body.categoria) {
+    if (!body.categoria)
         return mostrarMsg('msgProducto', '❌ Selecciona una categoría', 'err');
-    }
 
-    let productos = obtenerProductosLocal();
-
-    if (editId) {
-        // HU-02: Editar (Simulado) -> Al editar vuelve a estado PENDIENTE de revisión
-        const idInt = parseInt(editId);
-        const idx = productos.findIndex(p => p.id === idInt);
-        if (idx !== -1) {
-            productos[idx] = { 
-                ...productos[idx], 
-                ...body, 
-                estado: 'PENDIENTE', 
-                motivoRechazo: null 
-            };
-            guardarProductosLocal(productos);
-            mostrarMsg('msgProducto', '✅ Producto actualizado correctamente (En espera de aprobación)', 'ok');
+    try {
+        let res;
+        if (editId) {
+            body.id = parseInt(editId);
+            body.estado = 'PENDIENTE';
+            res = await fetch(API + '/api/productos', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            mostrarMsg('msgProducto', '✅ Producto actualizado (pendiente de aprobación)', 'ok');
+        } else {
+            res = await fetch(API + '/api/productos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            mostrarMsg('msgProducto', '✅ Producto registrado. Pendiente de aprobación.', 'ok');
         }
-    } else {
-        // HU-01: Crear (Simulado) -> Estado siempre PENDIENTE inicialmente
-        body.id = productos.length > 0 ? Math.max(...productos.map(p => p.id)) + 1 : 1;
-        body.estado = 'PENDIENTE';
-        productos.push(body);
-        guardarProductosLocal(productos);
-        mostrarMsg('msgProducto', '✅ Producto registrado. Pendiente de aprobación.', 'ok');
+        if (!res.ok) {
+            const d = await res.json().catch(() => ({}));
+            return mostrarMsg('msgProducto', '❌ Error: ' + (d.error || res.status), 'err');
+        }
+        cancelarEdicion();
+        cargarMisProductos();
+    } catch (e) {
+        mostrarMsg('msgProducto', '❌ No se pudo conectar con el servidor', 'err');
     }
-
-    cancelarEdicion();
-    cargarMisProductos();
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// HU-02: Cargar mis productos (por ofertanteId) - MODO FRONTEND
+// HU-02: Mis productos (ofertante)
 // ══════════════════════════════════════════════════════════════════════════
 async function cargarMisProductos() {
-    const ofId = usuarioActual ? usuarioActual.id : 1;
     const cont = document.getElementById('listaOfertante');
     if (!cont) return;
-    
     cont.innerHTML = '<p style="color:var(--muted);font-size:.88rem">Cargando...</p>';
-
-    let list = obtenerProductosLocal().filter(p => p.ofertanteId === ofId);
-
-    if (list.length === 0) {
-        cont.innerHTML = '<p style="color:var(--muted);font-size:.88rem">No tienes productos registrados aún.</p>';
-        return;
+    try {
+        const res = await fetch(API + '/api/productos?ofertanteId=' + usuarioActual.id);
+        const ct  = res.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+            cont.innerHTML = '<p style="color:var(--muted);font-size:.88rem">No tienes productos registrados aún.</p>';
+            return;
+        }
+        const list = await res.json();
+        cont.innerHTML = list.length === 0
+            ? '<p style="color:var(--muted);font-size:.88rem">No tienes productos registrados aún.</p>'
+            : list.map(prodCardOfertante).join('');
+    } catch (e) {
+        cont.innerHTML = '<p style="color:var(--danger);font-size:.88rem">Error al cargar productos.</p>';
     }
-    cont.innerHTML = list.map(prodCardOfertante).join('');
 }
 
 function prodCardOfertante(p) {
@@ -121,12 +99,12 @@ function prodCardOfertante(p) {
 }
 
 function cargarEdicion(p) {
-    document.getElementById('prodEditId').value   = p.id;
-    document.getElementById('prodTitulo').value   = p.titulo;
-    document.getElementById('prodDesc').value     = p.descripcion;
-    document.getElementById('prodPrecio').value   = p.precio;
-    document.getElementById('prodCategoria').value= p.categoria;
-    document.getElementById('prodTipo').value     = p.tipo || 'PRODUCTO';
+    document.getElementById('prodEditId').value    = p.id;
+    document.getElementById('prodTitulo').value    = p.titulo;
+    document.getElementById('prodDesc').value      = p.descripcion;
+    document.getElementById('prodPrecio').value    = p.precio;
+    document.getElementById('prodCategoria').value = p.categoria;
+    document.getElementById('prodTipo').value      = p.tipo || 'PRODUCTO';
     document.getElementById('prodFormTitulo').innerHTML =
         `✏️ Editando: "${p.titulo}" <span class="badge b-info">HU-02</span>`;
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -143,36 +121,44 @@ function cancelarEdicion() {
 
 async function eliminarProducto(id) {
     if (!confirm('¿Eliminar este producto?')) return;
-    
-    let productos = obtenerProductosLocal().filter(p => p.id !== id);
-    guardarProductosLocal(productos);
-    
-    mostrarMsg('msgProducto', '✅ Producto eliminado correctamente', 'ok');
-    cargarMisProductos();
+    try {
+        const res = await fetch(API + '/api/productos?id=' + id, { method: 'DELETE' });
+        mostrarMsg('msgProducto', res.ok ? '✅ Eliminado correctamente' : '❌ Error al eliminar', res.ok ? 'ok' : 'err');
+        cargarMisProductos();
+    } catch (e) {
+        mostrarMsg('msgProducto', '❌ Error de conexión', 'err');
+    }
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// HU-03: Panel Admin – listar pendientes + aprobar/rechazar - MODO FRONTEND
+// HU-03: Panel Admin
 // ══════════════════════════════════════════════════════════════════════════
 async function cargarAdmin() {
     const cont = document.getElementById('listaAdmin');
     if (!cont) return;
-    
     cont.innerHTML = '<p style="color:var(--muted);font-size:.88rem">Cargando...</p>';
+    try {
+        const [resPend, resAll] = await Promise.all([
+            fetch(API + '/api/productos?estado=PENDIENTE'),
+            fetch(API + '/api/productos?orden=recientes')
+        ]);
+        const pendientes = resPend.headers.get('content-type')?.includes('json') ? await resPend.json() : [];
+        const todos      = resAll.headers.get('content-type')?.includes('json')  ? await resAll.json()  : [];
 
-    let todos = obtenerProductosLocal();
-    let pendientes = todos.filter(p => p.estado === 'PENDIENTE');
+        if (document.getElementById('cntPend'))  document.getElementById('cntPend').textContent  = pendientes.length;
+        if (document.getElementById('cntApr'))   document.getElementById('cntApr').textContent   = todos.filter(p => p.estado === 'APROBADO').length;
+        if (document.getElementById('cntRech'))  document.getElementById('cntRech').textContent  = todos.filter(p => p.estado === 'RECHAZADO').length;
 
-    // Actualización dinámica de los contadores en las tarjetas de estadísticas
-    if(document.getElementById('cntPend')) document.getElementById('cntPend').textContent = pendientes.length;
-    if(document.getElementById('cntApr'))  document.getElementById('cntApr').textContent  = todos.filter(p => p.estado === 'APROBADO').length;
-    if(document.getElementById('cntRech')) document.getElementById('cntRech').textContent = todos.filter(p => p.estado === 'RECHAZADO').length;
+        // Cargar TODOS los pendientes (incluyendo los que el filtro de aprobados no devuelve)
+        const resTodos = await fetch(API + '/api/productos?estado=PENDIENTE');
+        const listaPend = resTodos.headers.get('content-type')?.includes('json') ? await resTodos.json() : [];
 
-    if (pendientes.length === 0) {
-        cont.innerHTML = '<p style="color:var(--muted);font-size:.88rem">✅ No hay productos pendientes de revisión.</p>';
-        return;
+        cont.innerHTML = listaPend.length === 0
+            ? '<p style="color:var(--muted);font-size:.88rem">✅ No hay productos pendientes de revisión.</p>'
+            : listaPend.map(prodCardAdmin).join('');
+    } catch (e) {
+        cont.innerHTML = '<p style="color:var(--danger)">Error al cargar panel admin.</p>';
     }
-    cont.innerHTML = pendientes.map(prodCardAdmin).join('');
 }
 
 function prodCardAdmin(p) {
@@ -193,16 +179,15 @@ function prodCardAdmin(p) {
 }
 
 async function aprobar(id) {
-    let productos = obtenerProductosLocal();
-    const idx = productos.findIndex(p => p.id === id);
-    
-    if (idx !== -1) {
-        productos[idx].estado = 'APROBADO';
-        productos[idx].motivoRechazo = null; // Limpia si tenía rechazos previos
-        guardarProductosLocal(productos);
-        alert('✅ Producto aprobado correctamente.');
-        cargarAdmin();
-    }
+    try {
+        const res = await fetch(API + '/api/productos', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, decision: 'APROBADO' })
+        });
+        if (res.ok) { alert('✅ Producto aprobado.'); cargarAdmin(); }
+        else alert('❌ Error al aprobar.');
+    } catch (e) { alert('❌ Error de conexión.'); }
 }
 
 function abrirModalRechazo(id) {
@@ -214,19 +199,15 @@ function abrirModalRechazo(id) {
 async function confirmarRechazo() {
     const motivo = document.getElementById('motivoTexto').value.trim();
     if (!motivo) { alert('Debes escribir el motivo del rechazo.'); return; }
-
-    let productos = obtenerProductosLocal();
-    const idx = productos.findIndex(p => p.id === productoARechazar);
-    
-    if (idx !== -1) {
-        productos[idx].estado = 'RECHAZADO';
-        productos[idx].motivoRechazo = motivo;
-        guardarProductosLocal(productos);
-        
-        alert('❌ Producto rechazado con éxito.');
-        cerrarModal();
-        cargarAdmin();
-    }
+    try {
+        const res = await fetch(API + '/api/productos', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: productoARechazar, decision: 'RECHAZADO', motivoRechazo: motivo })
+        });
+        if (res.ok) { alert('❌ Producto rechazado.'); cerrarModal(); cargarAdmin(); }
+        else alert('❌ Error al rechazar.');
+    } catch (e) { alert('❌ Error de conexión.'); }
 }
 
 function cerrarModal() {
@@ -235,219 +216,217 @@ function cerrarModal() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// Catálogo público (solo APROBADOS) - MODO FRONTEND
+// Catálogo (solo APROBADOS)
 // ══════════════════════════════════════════════════════════════════════════
 async function cargarCatalogo() {
     const cont = document.getElementById('listaCatalogo');
     if (!cont) return;
-    
     cont.innerHTML = '<p style="color:var(--muted);font-size:.88rem">Cargando...</p>';
-    
-    // Filtramos directamente los aprobados de la persistencia local
-    catalogoCache = obtenerProductosLocal().filter(p => p.estado === 'APROBADO');
-    filtrarCatalogo();
+    try {
+        const orden = document.getElementById('ordenarCat')?.value || 'recientes';
+        const res = await fetch(API + '/api/productos?orden=' + orden);
+        const ct  = res.headers.get('content-type') || '';
+        catalogoCache = ct.includes('json') ? await res.json() : [];
+        filtrarCatalogo();
+    } catch (e) {
+        cont.innerHTML = '<p style="color:var(--danger)">Error al cargar catálogo.</p>';
+    }
 }
 
-// REEMPLAZA tu función filtrarCatalogo en productos.js por esta:
 function filtrarCatalogo() {
-    const txt = document.getElementById('buscar').value.toLowerCase();
-    const cat = document.getElementById('filtroCat').value;
-    const orden = document.getElementById('ordenarCat')?.value || 'recientes'; // Captura el criterio de orden
-    
-    // 1. Filtrar
+    const txt   = document.getElementById('buscar')?.value.toLowerCase() || '';
+    const cat   = document.getElementById('filtroCat')?.value || '';
+    const orden = document.getElementById('ordenarCat')?.value || 'recientes';
+
     let filtrados = catalogoCache.filter(p =>
         (p.titulo.toLowerCase().includes(txt) || p.descripcion.toLowerCase().includes(txt)) &&
         (!cat || p.categoria === cat)
     );
-    
-    // 2. Ordenar (Simulado con atributos de la semilla o interacción)
-    if (orden === 'recientes') {
-        // Ordenar por ID de mayor a menor (los últimos creados)
-        filtrados.sort((a, b) => b.id - a.id);
-    } else if (orden === 'calificados') {
-        // Asumimos un atributo 'calificacion' (0 a 5) en el objeto
-        filtrados.sort((a, b) => (b.calificacion || 0) - (a.calificacion || 0));
-    } else if (orden === 'utilizados') {
-        // Asumimos un atributo 'vecesUtilizado' para medir popularidad
-        filtrados.sort((a, b) => (b.vecesUtilizado || 0) - (a.vecesUtilizado || 0));
-    }
-    
+
+    if (orden === 'recientes') filtrados.sort((a,b) => b.id - a.id);
+    else if (orden === 'calificados') filtrados.sort((a,b) => (b.calificacion||0) - (a.calificacion||0));
+    else if (orden === 'utilizados') filtrados.sort((a,b) => (b.contadorSolicitudes||0) - (a.contadorSolicitudes||0));
+
     const cont = document.getElementById('listaCatalogo');
     if (!cont) return;
-
     if (filtrados.length === 0) {
         cont.innerHTML = '<p style="color:var(--muted);font-size:.88rem">No se encontraron productos.</p>';
         return;
     }
-
-    // 3. Renderizar con el botón de "Solicitar" incluido
     cont.innerHTML = filtrados.map(p => `
         <div class="prod-card APROBADO">
             <div class="prod-titulo">${p.titulo}</div>
             <div style="display:flex;gap:.4rem;flex-wrap:wrap">
                 <span class="badge b-info">${p.categoria}</span>
-                ${p.calificacion ? `<span class="badge" style="background:#fef3c7;color:#92400e">⭐ ${p.calificacion.toFixed(1)}</span>` : ''}
+                ${p.calificacion > 0 ? `<span class="badge" style="background:#fef3c7;color:#92400e">⭐ ${parseFloat(p.calificacion).toFixed(1)}/10</span>` : ''}
             </div>
             <div class="prod-desc">${p.descripcion}</div>
             <div class="prod-meta">
                 <span class="prod-precio">$${parseFloat(p.precio).toFixed(2)}</span>
                 <span style="font-size:.78rem;color:var(--muted)">👤 ${p.ofertanteNombre || 'Anónimo'}</span>
             </div>
-            <div class="prod-actions" style="margin-top:10px">
-                <button class="btn-success btn-sm" style="width:100%" onclick="abrirModalSolicitud(${p.id}, '${p.titulo.replace(/'/g, "\\'")}')">📩 Solicitar este Producto/Servicio</button>
+            <div class="prod-actions" style="margin-top:10px;flex-direction:column;gap:6px">
+                <button class="btn-success btn-sm" style="width:100%"
+                    onclick="abrirModalSolicitud(${p.id}, '${p.titulo.replace(/'/g,"\\'")}')">
+                    📩 Solicitar
+                </button>
+                <button class="btn-warning btn-sm" style="width:100%"
+                    onclick="abrirModalCalificacion(${p.id}, '${p.titulo.replace(/'/g,"\\'")}')">
+                    ⭐ Calificar
+                </button>
+                <button class="btn-muted btn-sm" style="width:100%"
+                    onclick="verCalificaciones(${p.id}, '${p.titulo.replace(/'/g,"\\'")}')">
+                    💬 Ver reseñas
+                </button>
             </div>
         </div>`).join('');
 }
-// ── Helper: badge de estado ───────────────────────────────────────────────
+
 function badgeEstado(estado) {
-    const m = { PENDIENTE: 'b-pending', APROBADO: 'b-approved', RECHAZADO: 'b-rejected' };
-    const i = { PENDIENTE: '⏳', APROBADO: '✅', RECHAZADO: '❌' };
+    const m = { PENDIENTE:'b-pending', APROBADO:'b-approved', RECHAZADO:'b-rejected' };
+    const i = { PENDIENTE:'⏳', APROBADO:'✅', RECHAZADO:'❌' };
     return `<span class="badge ${m[estado]}">${i[estado]} ${estado}</span>`;
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// Solicitudes
+// ══════════════════════════════════════════════════════════════════════════
 let productoASolicitar = null;
 
-// Abre un modal para que el demandante escriba los requerimientos de su solicitud
 function abrirModalSolicitud(id, titulo) {
     productoASolicitar = id;
-    // Asumiendo que reutilizas un modal o creas uno para solicitudes
-    const notas = prompt(`Solicitar: "${titulo}"\n\nEscribe los detalles de tu requerimiento (ej. Fecha, cantidad, dirección, etc.):`);
-    
-    if (notas === null) return; // Canceló
-    if (notas.trim().length < 5) {
-        alert("❌ Debes ingresar una descripción detallada de tu necesidad para que el ofertante la evalúe.");
-        return;
-    }
-    
-    registrarSolicitudSimulada(notas.trim());
+    const notas = prompt(`Solicitar: "${titulo}"\n\nEscribe los detalles de tu requerimiento:`);
+    if (notas === null) return;
+    if (notas.trim().length < 5) { alert('❌ Describe tu necesidad con más detalle.'); return; }
+    enviarSolicitud(notas.trim());
 }
 
-function registrarSolicitudSimulada(notas) {
-    let solicitudes = JSON.parse(localStorage.getItem('solicitudes_simuladas') || '[]');
-    let productos = obtenerProductosLocal();
-    const prod = productos.find(p => p.id === productoASolicitar);
-
-    if (!prod) return alert("❌ Error: Producto no encontrado.");
-
-    const nuevaSolicitud = {
-        id: solicitudes.length > 0 ? Math.max(...solicitudes.map(s => s.id)) + 1 : 1,
-        productoId: prod.id,
-        productoTitulo: prod.titulo,
-        ofertanteId: prod.ofertanteId, // A quién va dirigida
-        demandanteId: usuarioActual ? usuarioActual.id : 99, // Quién la pide
-        demandanteNombre: usuarioActual ? usuarioActual.nombre : "Cliente Demo",
-        detalles: "%SOLICITUD: " + notas,
-        estado: "PENDIENTE", // Estado de la solicitud: PENDIENTE, ACEPTADA, RECHAZADA
-        fecha: new Date().toLocaleDateString()
-    };
-
-    solicitudes.push(nuevaSolicitud);
-    localStorage.setItem('solicitudes_simuladas', JSON.stringify(solicitudes));
-    
-    alert("✅ ¡Solicitud enviada al ofertante con éxito! Puedes ver su estado en tu panel.");
-    productoASolicitar = null;
+async function enviarSolicitud(notas) {
+    try {
+        const res = await fetch(API + '/api/solicitudes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                productoId:      productoASolicitar,
+                demandanteId:    usuarioActual.id,
+                demandanteNombre: usuarioActual.nombre,
+                notas
+            })
+        });
+        alert(res.ok ? '✅ Solicitud enviada al ofertante.' : '❌ Error al enviar solicitud.');
+        productoASolicitar = null;
+    } catch (e) { alert('❌ Error de conexión.'); }
 }
 
-// Carga las solicitudes que le han hecho a este Ofertante específico
 async function cargarSolicitudesOfertante() {
-    const cont = document.getElementById('listaSolicitudesRecibidas'); // Asegúrate de tener este contenedor en el HTML de la pestaña Ofertante
+    const cont = document.getElementById('listaSolicitudesRecibidas');
     if (!cont) return;
-
-    const ofId = usuarioActual ? usuarioActual.id : 1;
-    let todasLasSolicitudes = JSON.parse(localStorage.getItem('solicitudes_simuladas') || '[]');
-    
-    // Filtrar solo las solicitudes de productos que le pertenecen a este ofertante
-    let misSolicitudes = todasLasSolicitudes.filter(s => s.ofertanteId === ofId);
-
-    if (misSolicitudes.length === 0) {
-        cont.innerHTML = '<p style="color:var(--muted);font-size:.88rem">No tienes solicitudes pendientes de clientes.</p>';
-        return;
-    }
-
-    cont.innerHTML = misSolicitudes.map(s => `
-        <div class="prod-card ${s.estado}" style="border-left: 4px solid ${s.estado === 'PENDIENTE' ? '#e9b10a' : s.estado === 'ACEPTADA' ? '#10b981' : '#ef4444'}">
-            <div style="display:flex; justify-content:space-between;">
-                <span class="prod-titulo" style="font-size: 1rem;">📦 ${s.productoTitulo}</span>
-                <span class="badge">${s.fecha}</span>
-            </div>
-            <div style="margin: 5px 0; font-size: 0.85rem;">
-                <strong>Cliente:</strong> ${s.demandanteNombre}
-            </div>
-            <div class="prod-desc" style="background: rgba(0,0,0,0.03); padding: 8px; border-radius:4px; font-style: italic;">
-                "${s.detalles.replace("%SOLICITUD: ", "")}"
-            </div>
-            <div style="margin-top: 10px; font-size: 0.8rem;">
-                <strong>Estado de Solicitud:</strong> 
-                <span style="color: ${s.estado === 'PENDIENTE' ? '#d97706' : s.estado === 'ACEPTADA' ? '#059669' : '#dc2626'} font-weight:bold;">
-                    ${s.estado}
-                </span>
-            </div>
-            
-            ${s.estado === 'PENDIENTE' ? `
-                <div class="prod-actions" style="margin-top: 10px; display:flex; gap:10px;">
-                    <button class="btn-success btn-sm" style="flex:1;" onclick="responderSolicitud(${s.id}, 'ACEPTADA')">✅ Aceptar Pedido</button>
-                    <button class="btn-danger btn-sm" style="flex:1;" onclick="responderSolicitud(${s.id}, 'RECHAZADA')">❌ Rechazar Pedido</button>
+    try {
+        const res = await fetch(API + '/api/solicitudes?ofertanteId=' + usuarioActual.id);
+        const ct  = res.headers.get('content-type') || '';
+        if (!ct.includes('json')) {
+            cont.innerHTML = '<p style="color:var(--muted);font-size:.88rem">No tienes solicitudes de clientes.</p>';
+            return;
+        }
+        const lista = await res.json();
+        cont.innerHTML = lista.map(s => `
+            <div class="prod-card ${s.estado}" style="border-left:4px solid ${s.estado==='PENDIENTE'?'#e9b10a':s.estado==='ACEPTADA'?'#10b981':'#ef4444'}">
+                <div style="display:flex;justify-content:space-between">
+                    <span class="prod-titulo" style="font-size:1rem">📦 Solicitud #${s.id}</span>
+                    <span class="badge">${s.estado}</span>
                 </div>
-            ` : ''}
-        </div>
-    `).join('');
-}
-
-// Carga las solicitudes que le han hecho a este Ofertante específico
-async function cargarSolicitudesOfertante() {
-    const cont = document.getElementById('listaSolicitudesRecibidas'); // Asegúrate de tener este contenedor en el HTML de la pestaña Ofertante
-    if (!cont) return;
-
-    const ofId = usuarioActual ? usuarioActual.id : 1;
-    let todasLasSolicitudes = JSON.parse(localStorage.getItem('solicitudes_simuladas') || '[]');
-    
-    // Filtrar solo las solicitudes de productos que le pertenecen a este ofertante
-    let misSolicitudes = todasLasSolicitudes.filter(s => s.ofertanteId === ofId);
-
-    if (misSolicitudes.length === 0) {
-        cont.innerHTML = '<p style="color:var(--muted);font-size:.88rem">No tienes solicitudes pendientes de clientes.</p>';
-        return;
-    }
-
-    cont.innerHTML = misSolicitudes.map(s => `
-        <div class="prod-card ${s.estado}" style="border-left: 4px solid ${s.estado === 'PENDIENTE' ? '#e9b10a' : s.estado === 'ACEPTADA' ? '#10b981' : '#ef4444'}">
-            <div style="display:flex; justify-content:space-between;">
-                <span class="prod-titulo" style="font-size: 1rem;">📦 ${s.productoTitulo}</span>
-                <span class="badge">${s.fecha}</span>
-            </div>
-            <div style="margin: 5px 0; font-size: 0.85rem;">
-                <strong>Cliente:</strong> ${s.demandanteNombre}
-            </div>
-            <div class="prod-desc" style="background: rgba(0,0,0,0.03); padding: 8px; border-radius:4px; font-style: italic;">
-                "${s.detalles.replace("%SOLICITUD: ", "")}"
-            </div>
-            <div style="margin-top: 10px; font-size: 0.8rem;">
-                <strong>Estado de Solicitud:</strong> 
-                <span style="color: ${s.estado === 'PENDIENTE' ? '#d97706' : s.estado === 'ACEPTADA' ? '#059669' : '#dc2626'} font-weight:bold;">
-                    ${s.estado}
-                </span>
-            </div>
-            
-            ${s.estado === 'PENDIENTE' ? `
-                <div class="prod-actions" style="margin-top: 10px; display:flex; gap:10px;">
-                    <button class="btn-success btn-sm" style="flex:1;" onclick="responderSolicitud(${s.id}, 'ACEPTADA')">✅ Aceptar Pedido</button>
-                    <button class="btn-danger btn-sm" style="flex:1;" onclick="responderSolicitud(${s.id}, 'RECHAZADA')">❌ Rechazar Pedido</button>
-                </div>
-            ` : ''}
-        </div>
-    `).join('');
-}
-
-// Cambia el estado de la solicitud del cliente
-function responderSolicitud(solicitudId, nuevoEstado) {
-    let solicitudes = JSON.parse(localStorage.getItem('solicitudes_simuladas') || '[]');
-    const idx = solicitudes.findIndex(s => s.id === solicitudId);
-
-    if (idx !== -1) {
-        solicitudes[idx].estado = nuevoEstado;
-        localStorage.setItem('solicitudes_simuladas', JSON.stringify(solicitudes));
-        alert(`Solicitud cambiada a: ${nuevoEstado}`);
-        cargarSolicitudesOfertante(); // Recargar la lista
+                <div style="margin:5px 0;font-size:.85rem"><strong>Cliente:</strong> ${s.demandanteNombre || 'Cliente'}</div>
+                <div class="prod-desc" style="background:rgba(0,0,0,.03);padding:8px;border-radius:4px;font-style:italic">"${s.notas || ''}"</div>
+                ${s.estado === 'PENDIENTE' ? `
+                <div class="prod-actions" style="margin-top:10px;display:flex;gap:10px">
+                    <button class="btn-success btn-sm" style="flex:1" onclick="responderSolicitud(${s.id},'ACEPTADA')">✅ Aceptar</button>
+                    <button class="btn-danger  btn-sm" style="flex:1" onclick="responderSolicitud(${s.id},'RECHAZADA')">❌ Rechazar</button>
+                </div>` : ''}
+            </div>`).join('');
+    } catch (e) {
+        cont.innerHTML = '<p style="color:var(--danger)">Error al cargar solicitudes.</p>';
     }
 }
 
+async function responderSolicitud(id, estado) {
+    try {
+        await fetch(API + '/api/solicitudes', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, estado })
+        });
+        cargarSolicitudesOfertante();
+    } catch (e) { alert('❌ Error de conexión.'); }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Calificaciones
+// ══════════════════════════════════════════════════════════════════════════
+let productoACalificar = null;
+
+function abrirModalCalificacion(id, titulo) {
+    productoACalificar = id;
+    document.getElementById('calProductoTitulo').textContent = titulo;
+    document.getElementById('calComentario').value = '';
+    document.getElementById('calPuntuacion').value = '10';
+    document.getElementById('calWordCount').textContent = '0 / 100 palabras';
+    document.getElementById('overlayCalificacion').classList.add('open');
+}
+
+function cerrarModalCalificacion() {
+    document.getElementById('overlayCalificacion').classList.remove('open');
+    productoACalificar = null;
+}
+
+function contarPalabrasCalificacion() {
+    const txt = document.getElementById('calComentario').value.trim();
+    const n = txt === '' ? 0 : txt.split(/\s+/).length;
+    const el = document.getElementById('calWordCount');
+    el.textContent = n + ' / 100 palabras';
+    el.style.color = n > 100 ? 'var(--danger)' : 'var(--muted)';
+}
+
+async function enviarCalificacion() {
+    const comentario  = document.getElementById('calComentario').value.trim();
+    const puntuacion  = parseInt(document.getElementById('calPuntuacion').value);
+    const palabras    = comentario === '' ? 0 : comentario.split(/\s+/).length;
+
+    if (!comentario) { alert('❌ Escribe un comentario.'); return; }
+    if (palabras > 100) { alert('❌ El comentario no puede superar las 100 palabras.'); return; }
+    if (puntuacion < 1 || puntuacion > 10) { alert('❌ La puntuación debe ser entre 1 y 10.'); return; }
+
+    try {
+        const res = await fetch(API + '/api/calificaciones', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                productoId:   productoACalificar,
+                usuarioId:    usuarioActual.id,
+                usuarioNombre: usuarioActual.nombre,
+                puntuacion,
+                comentario
+            })
+        });
+        if (res.ok) {
+            alert('✅ ¡Calificación enviada!');
+            cerrarModalCalificacion();
+            cargarCatalogo(); // refrescar para mostrar nuevo promedio
+        } else {
+            const d = await res.json().catch(() => ({}));
+            alert('❌ ' + (d.error || 'Error al enviar calificación'));
+        }
+    } catch (e) { alert('❌ Error de conexión.'); }
+}
+
+async function verCalificaciones(id, titulo) {
+    try {
+        const res = await fetch(API + '/api/calificaciones?productoId=' + id);
+        const lista = await res.json();
+        if (lista.length === 0) { alert(`"${titulo}"\n\nAún no tiene reseñas.`); return; }
+        const texto = lista.map(c =>
+            `⭐ ${c.puntuacion}/10 — ${c.usuarioNombre} (${c.fecha})\n"${c.comentario}"`
+        ).join('\n\n');
+        const prom = (lista.reduce((a,c) => a + c.puntuacion, 0) / lista.length).toFixed(1);
+        alert(`${titulo}\nPromedio: ${prom}/10 (${lista.length} reseña${lista.length > 1 ? 's' : ''})\n\n${texto}`);
+    } catch (e) { alert('❌ Error al cargar reseñas.'); }
+}
